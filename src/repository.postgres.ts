@@ -1,0 +1,175 @@
+import { Pool } from 'pg';
+import type { UserRepository } from './repository.js';
+import type { AuthUser, RefreshTokenRecord, SkillState, UserProfile } from './types.js';
+
+function serializeSkills(skills: Record<string, SkillState>): string {
+  return JSON.stringify(skills);
+}
+
+function parseSkills(raw: unknown): Record<string, SkillState> {
+  if (!raw || typeof raw !== 'string') {
+    return {};
+  }
+
+  try {
+    return JSON.parse(raw) as Record<string, SkillState>;
+  } catch {
+    return {};
+  }
+}
+
+function toRefreshRecord(row: Record<string, unknown>): RefreshTokenRecord {
+  return {
+    tokenId: String(row.token_id),
+    userId: String(row.user_id),
+    sessionId: String(row.session_id),
+    tokenHash: String(row.token_hash),
+    createdAt: new Date(row.created_at as string).toISOString(),
+    expiresAt: new Date(row.expires_at as string).toISOString(),
+    revokedAt: row.revoked_at ? new Date(row.revoked_at as string).toISOString() : undefined
+  };
+}
+
+export class PostgresUserRepository implements UserRepository {
+  public constructor(private readonly pool: Pool) {}
+
+  public async createAuthUser(user: AuthUser): Promise<AuthUser> {
+    await this.pool.query(
+      'INSERT INTO auth_users (user_id, email, password_hash) VALUES ($1, $2, $3)',
+      [user.userId, user.email, user.passwordHash]
+    );
+    return user;
+  }
+
+  public async getAuthUserByEmail(email: string): Promise<AuthUser | null> {
+    const result = await this.pool.query(
+      'SELECT user_id, email, password_hash FROM auth_users WHERE email = $1 LIMIT 1',
+      [email.toLowerCase()]
+    );
+
+    const row = result.rows[0];
+    if (!row) {
+      return null;
+    }
+
+    return {
+      userId: String(row.user_id),
+      email: String(row.email),
+      passwordHash: String(row.password_hash)
+    };
+  }
+
+  public async getUserProfile(userId: string): Promise<UserProfile | null> {
+    const result = await this.pool.query(
+      'SELECT user_id, current_level, streak_days, last_active_date, skills_json FROM user_profiles WHERE user_id = $1 LIMIT 1',
+      [userId]
+    );
+
+    const row = result.rows[0];
+    if (!row) {
+      return null;
+    }
+
+    return {
+      userId: String(row.user_id),
+      currentLevel: String(row.current_level) as UserProfile['currentLevel'],
+      streakDays: Number(row.streak_days),
+      lastActiveDate: row.last_active_date ? String(row.last_active_date) : undefined,
+      skills: parseSkills(row.skills_json)
+    };
+  }
+
+  public async upsertUserProfile(profile: UserProfile): Promise<UserProfile> {
+    await this.pool.query(
+      `
+      INSERT INTO user_profiles (user_id, current_level, streak_days, last_active_date, skills_json)
+      VALUES ($1, $2, $3, $4, $5)
+      ON CONFLICT (user_id) DO UPDATE SET
+        current_level = EXCLUDED.current_level,
+        streak_days = EXCLUDED.streak_days,
+        last_active_date = EXCLUDED.last_active_date,
+        skills_json = EXCLUDED.skills_json
+      `,
+      [
+        profile.userId,
+        profile.currentLevel,
+        profile.streakDays,
+        profile.lastActiveDate ?? null,
+        serializeSkills(profile.skills)
+      ]
+    );
+
+    return profile;
+  }
+
+  public async storeRefreshToken(record: RefreshTokenRecord): Promise<void> {
+    await this.pool.query(
+      `
+      INSERT INTO refresh_tokens (token_id, user_id, session_id, token_hash, created_at, expires_at, revoked_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `,
+      [
+        record.tokenId,
+        record.userId,
+        record.sessionId,
+        record.tokenHash,
+        record.createdAt,
+        record.expiresAt,
+        record.revokedAt ?? null
+      ]
+    );
+  }
+
+  public async getRefreshToken(tokenId: string): Promise<RefreshTokenRecord | null> {
+    const result = await this.pool.query(
+      'SELECT token_id, user_id, session_id, token_hash, created_at, expires_at, revoked_at FROM refresh_tokens WHERE token_id = $1 LIMIT 1',
+      [tokenId]
+    );
+
+    const row = result.rows[0];
+    return row ? toRefreshRecord(row as Record<string, unknown>) : null;
+  }
+
+  public async revokeRefreshToken(tokenId: string): Promise<void> {
+    await this.pool.query(
+      'UPDATE refresh_tokens SET revoked_at = COALESCE(revoked_at, NOW()) WHERE token_id = $1',
+      [tokenId]
+    );
+  }
+
+  public async revokeRefreshTokensByUser(userId: string): Promise<void> {
+    await this.pool.query(
+      'UPDATE refresh_tokens SET revoked_at = COALESCE(revoked_at, NOW()) WHERE user_id = $1 AND revoked_at IS NULL',
+      [userId]
+    );
+  }
+
+  public async revokeRefreshTokensBySession(userId: string, sessionId: string): Promise<void> {
+    await this.pool.query(
+      `
+      UPDATE refresh_tokens
+      SET revoked_at = COALESCE(revoked_at, NOW())
+      WHERE user_id = $1 AND session_id = $2 AND revoked_at IS NULL
+      `,
+      [userId, sessionId]
+    );
+  }
+
+  public async pruneExpiredRefreshTokens(nowIso: string): Promise<number> {
+    const result = await this.pool.query(
+      'DELETE FROM refresh_tokens WHERE expires_at <= $1 RETURNING token_id',
+      [nowIso]
+    );
+
+    return result.rowCount ?? 0;
+  }
+
+  public async checkReadiness(): Promise<boolean> {
+    try {
+      await this.pool.query('SELECT 1');
+      return true;
+    } catch {
+      return false;
+    }
+  }
+}

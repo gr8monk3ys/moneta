@@ -1,0 +1,30 @@
+name: Failure Alert
+
+on:
+  workflow_run:
+    workflows: ["CI", "Deploy"]
+    types: [completed]
+
+jobs:
+  notify:
+    if: ${{ github.event.workflow_run.conclusion == 'failure' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send webhook alert
+        env:
+          ALERT_WEBHOOK_URL: ${{ secrets.ALERT_WEBHOOK_URL }}
+          WORKFLOW_NAME: ${{ github.event.workflow_run.name }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+        run: |
+          if [ -z "${ALERT_WEBHOOK_URL}" ]; then
+            echo "ALERT_WEBHOOK_URL not configured; skipping notification"
+            exit 0
+          fi
+
+          payload=$(cat <<JSON
+          {
+            "text": "Moneta workflow failed: ${WORKFLOW_NAME} - ${RUN_URL}"
+          }
+JSON
+)
+          curl -X POST -H 'Content-type: application/json' --data "$payload" "$ALERT_WEBHOOK_URL"

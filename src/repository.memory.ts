@@ -1,0 +1,90 @@
+import { users } from './data.js';
+import type { UserRepository } from './repository.js';
+import type { AuthUser, RefreshTokenRecord, UserProfile } from './types.js';
+
+export class InMemoryUserRepository implements UserRepository {
+  private readonly authUsers: Map<string, AuthUser> = new Map();
+  private readonly refreshTokens: Map<string, RefreshTokenRecord> = new Map();
+
+  public async createAuthUser(user: AuthUser): Promise<AuthUser> {
+    this.authUsers.set(user.email.toLowerCase(), user);
+    return user;
+  }
+
+  public async getAuthUserByEmail(email: string): Promise<AuthUser | null> {
+    return this.authUsers.get(email.toLowerCase()) ?? null;
+  }
+
+  public async getUserProfile(userId: string): Promise<UserProfile | null> {
+    return users[userId] ?? null;
+  }
+
+  public async upsertUserProfile(profile: UserProfile): Promise<UserProfile> {
+    users[profile.userId] = profile;
+    return profile;
+  }
+
+  public async storeRefreshToken(record: RefreshTokenRecord): Promise<void> {
+    this.refreshTokens.set(record.tokenId, record);
+  }
+
+  public async getRefreshToken(tokenId: string): Promise<RefreshTokenRecord | null> {
+    return this.refreshTokens.get(tokenId) ?? null;
+  }
+
+  public async revokeRefreshToken(tokenId: string): Promise<void> {
+    const record = this.refreshTokens.get(tokenId);
+    if (!record) {
+      return;
+    }
+
+    this.refreshTokens.set(tokenId, {
+      ...record,
+      revokedAt: new Date().toISOString()
+    });
+  }
+
+  public async revokeRefreshTokensByUser(userId: string): Promise<void> {
+    for (const [tokenId, record] of this.refreshTokens.entries()) {
+      if (record.userId !== userId || record.revokedAt) {
+        continue;
+      }
+
+      this.refreshTokens.set(tokenId, {
+        ...record,
+        revokedAt: new Date().toISOString()
+      });
+    }
+  }
+
+  public async revokeRefreshTokensBySession(userId: string, sessionId: string): Promise<void> {
+    for (const [tokenId, record] of this.refreshTokens.entries()) {
+      if (record.userId !== userId || record.sessionId !== sessionId || record.revokedAt) {
+        continue;
+      }
+
+      this.refreshTokens.set(tokenId, {
+        ...record,
+        revokedAt: new Date().toISOString()
+      });
+    }
+  }
+
+  public async pruneExpiredRefreshTokens(nowIso: string): Promise<number> {
+    let removed = 0;
+    const nowMs = new Date(nowIso).getTime();
+
+    for (const [tokenId, record] of this.refreshTokens.entries()) {
+      if (new Date(record.expiresAt).getTime() <= nowMs) {
+        this.refreshTokens.delete(tokenId);
+        removed += 1;
+      }
+    }
+
+    return removed;
+  }
+
+  public async checkReadiness(): Promise<boolean> {
+    return true;
+  }
+}

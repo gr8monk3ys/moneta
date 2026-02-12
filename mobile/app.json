@@ -1,0 +1,22 @@
+{
+  "expo": {
+    "name": "Moneta",
+    "slug": "moneta",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.moneta.app"
+    },
+    "android": {
+      "package": "com.moneta.app"
+    },
+    "web": {
+      "bundler": "metro"
+    }
+  }
+}
