@@ -1,0 +1,79 @@
+import { describe, expect, it, vi } from 'vitest';
+import { PostgresUserRepository } from '../src/repository.postgres.js';
+
+function buildPoolMock() {
+  return {
+    query: vi.fn()
+  };
+}
+
+describe('PostgresUserRepository', () => {
+  it('maps auth and profile rows from query results', async () => {
+    const pool = buildPoolMock();
+    const repo = new PostgresUserRepository(pool as never);
+
+    pool.query
+      .mockResolvedValueOnce({ rows: [{ user_id: 'u1', email: 'a@example.com', password_hash: 'hash' }], rowCount: 1 })
+      .mockResolvedValueOnce({
+        rows: [{
+          user_id: 'u1',
+          current_level: 'F3',
+          streak_days: 4,
+          last_active_date: '2026-01-01',
+          skills_json: JSON.stringify({ skill: { skillId: 'skill', mastery: 0.8 } })
+        }],
+        rowCount: 1
+      })
+      .mockResolvedValueOnce({ rows: [{ token_id: 't1', user_id: 'u1', session_id: 's1', token_hash: 'h1', created_at: '2026-01-01', expires_at: '2026-01-02', revoked_at: null }], rowCount: 1 });
+
+    const auth = await repo.getAuthUserByEmail('A@EXAMPLE.COM');
+    const profile = await repo.getUserProfile('u1');
+    const token = await repo.getRefreshToken('t1');
+
+    expect(auth?.email).toBe('a@example.com');
+    expect(profile?.currentLevel).toBe('F3');
+    expect(profile?.skills.skill.mastery).toBe(0.8);
+    expect(token?.tokenId).toBe('t1');
+  });
+
+  it('returns null when rows are missing and handles malformed skills', async () => {
+    const pool = buildPoolMock();
+    const repo = new PostgresUserRepository(pool as never);
+
+    pool.query
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 })
+      .mockResolvedValueOnce({ rows: [{ user_id: 'u1', current_level: 'F1', streak_days: 0, skills_json: 'not-json' }], rowCount: 1 })
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 });
+
+    expect(await repo.getAuthUserByEmail('nobody@example.com')).toBeNull();
+    expect((await repo.getUserProfile('u1'))?.skills).toEqual({});
+    expect(await repo.getRefreshToken('missing')).toBeNull();
+  });
+
+  it('executes write operations and readiness checks', async () => {
+    const pool = buildPoolMock();
+    const repo = new PostgresUserRepository(pool as never);
+
+    pool.query
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({ rowCount: 3 })
+      .mockResolvedValueOnce({})
+      .mockRejectedValueOnce(new Error('db down'));
+
+    await repo.createAuthUser({ userId: 'u1', email: 'x@example.com', passwordHash: 'hash' });
+    await repo.upsertUserProfile({ userId: 'u1', currentLevel: 'F1', streakDays: 0, skills: {} });
+    await repo.storeRefreshToken({ tokenId: 't1', userId: 'u1', sessionId: 's1', tokenHash: 'h', createdAt: '2026-01-01', expiresAt: '2026-01-02' });
+    await repo.revokeRefreshToken('t1');
+    await repo.revokeRefreshTokensByUser('u1');
+    await repo.revokeRefreshTokensBySession('u1', 's1');
+
+    expect(await repo.pruneExpiredRefreshTokens('2026-02-01')).toBe(3);
+    expect(await repo.checkReadiness()).toBe(true);
+    expect(await repo.checkReadiness()).toBe(false);
+  });
+});
