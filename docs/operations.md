@@ -47,11 +47,13 @@
 - Use `docs/go-live-checklist.md` as the release gate before enabling production traffic.
 - Record final verification and release sign-off evidence using `docs/release-evidence-template.md`.
 - Use `docs/security-secret-rotation-policy.md` and `docs/compliance/` docs for security/compliance artifacts required by store submission.
+- Follow `docs/external-go-live-execution-guide.md` for command-by-command external execution.
 
 ## Production readiness verification
 - Run `./scripts/production-readiness-check.sh` before deployment to validate required production environment variables and reject insecure defaults.
 - This script is intended as a preflight guardrail and should be wired into your deploy pipeline.
 - Generate a redacted environment evidence artifact with `./scripts/generate-redacted-env-report.sh` for release records.
+- Use `./scripts/collect-release-evidence.sh` to capture consolidated pass/fail logs and artifacts in one run.
 
 ## Final release verification gate
 - Run `./scripts/final-verification-gate.sh` before release go/no-go.

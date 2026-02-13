@@ -15,7 +15,8 @@
     "test:integration": "vitest run --exclude dist tests/postgres.integration.test.ts",
     "test:all": "npm test && npm run test:integration",
     "test:coverage": "vitest run --coverage --exclude dist tests",
-    "check:billing-release": "./scripts/billing-release-readiness-check.sh"
+    "check:billing-release": "./scripts/billing-release-readiness-check.sh",
+    "release:evidence": "./scripts/collect-release-evidence.sh"
   },
   "keywords": [],
   "author": "",

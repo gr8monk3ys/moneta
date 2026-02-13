@@ -11,6 +11,8 @@ An iOS / Android finance-learning platform.
 - [Release Evidence Template](docs/release-evidence-template.md)
 - [Observability Production Setup](docs/observability-production-setup.md)
 - [Secret Rotation Policy](docs/security-secret-rotation-policy.md)
+- [External Go-Live Execution Guide](docs/external-go-live-execution-guide.md)
+- [Store Billing QA Matrix Template](docs/store-billing-qa-matrix-template.md)
 - [Compliance: Privacy Policy (Draft)](docs/compliance/privacy-policy.md)
 - [Compliance: Subscription Terms (Draft)](docs/compliance/subscription-terms.md)
 - [Compliance: Account/Data Deletion Policy (Draft)](docs/compliance/account-data-deletion-policy.md)
@@ -89,6 +91,7 @@ Production readiness helper:
 - If you intentionally need to skip integration tests locally, set `REQUIRE_INTEGRATION_TESTS=false` explicitly.
 - Run `NODE_ENV=production ./scripts/billing-release-readiness-check.sh` to validate billing provider/mobile SKU configuration before submitting store builds.
 - Run `./scripts/generate-redacted-env-report.sh` to create a shareable, non-secret environment evidence snapshot for release review.
+- Run `./scripts/collect-release-evidence.sh` in the target environment to bundle check outputs into `artifacts/release-evidence/<timestamp>/`.
 
 Mobile:
 
@@ -105,3 +108,4 @@ Branch protection scripts:
 
 - `./scripts/configure-branch-protection.sh [branch]`
 - `./scripts/verify-branch-protection.sh [branch]`
+- `./scripts/collect-release-evidence.sh`

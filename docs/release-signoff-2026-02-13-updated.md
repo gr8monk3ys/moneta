@@ -23,6 +23,9 @@
   - `docs/runbooks/redis-rate-limit-outage.md`
   - `docs/runbooks/auth-failure-spike.md`
 - Added redacted env evidence generator: `scripts/generate-redacted-env-report.sh`
+- Added consolidated evidence runner: `scripts/collect-release-evidence.sh`
+- Added external execution guide: `docs/external-go-live-execution-guide.md`
+- Added store QA matrix template: `docs/store-billing-qa-matrix-template.md`
 - Updated deploy workflow to run production billing preflight before deployment and expanded post-deploy health verification.
 
 ## P0 status (strict done/blocker)

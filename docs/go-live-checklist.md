@@ -2,6 +2,10 @@
 
 This checklist is organized by release criticality so the team can ship in controlled stages.
 
+Execution companion:
+
+- `docs/external-go-live-execution-guide.md`
+
 ## P0 — Must complete before production launch
 
 ### Security and secrets
@@ -61,6 +65,7 @@ This checklist is organized by release criticality so the team can ship in contr
   - `EXPO_PUBLIC_ANDROID_SUBSCRIPTION_PRODUCT_IDS`
 - [ ] Verify secure auth persistence and logout flows on cold app restart.
 - [ ] Verify in-app account export/deletion flows meet App Store and Play policy requirements.
+- [ ] Complete store billing lifecycle validation using `docs/store-billing-qa-matrix-template.md`.
 
 ## P1 — Should complete in first post-launch sprint
 
