@@ -37,10 +37,12 @@ All routes below require `Authorization: Bearer <access-token>`.
 Calculates and stores finance level from placement results for the authenticated user.
 
 ### `GET /api/learn/today/:userId`
-Returns due reviews and next recommended lesson. `:userId` must match token subject.
+Returns reviews that are currently due (based on persisted per-skill schedule) and next recommended lesson. `:userId` must match token subject.
 
 ### `POST /api/sessions/complete`
 Stores item outcomes, updates streak, and schedules review items.
+- Optional body field: `timeZone` (IANA timezone like `America/New_York`) to compute streak day boundaries.
+- Optional header fallback: `x-user-timezone` if `timeZone` is omitted.
 
 ### `GET /api/progress/:userId`
 Returns level, streak, and mastery summary. `:userId` must match token subject.

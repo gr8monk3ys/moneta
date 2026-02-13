@@ -30,6 +30,8 @@ describe('engine', () => {
     expect(reviewTwo.skillId).toBe('budgeting');
     expect(user.skills.budgeting?.mastery).toBeCloseTo(0.23);
     expect(user.skills.budgeting?.lastReviewedAt).toBeTruthy();
+    expect(user.skills.budgeting?.nextReviewAt).toBeTruthy();
+    expect(new Date(user.skills.budgeting?.nextReviewAt ?? '').getTime()).toBeGreaterThan(Date.now());
   });
 
   it('increments streak on consecutive days and resets after missed day', () => {
@@ -47,5 +49,15 @@ describe('engine', () => {
 
     const sameDay = buildUser({ streakDays: 4, lastActiveDate: today.toISOString().slice(0, 10) });
     expect(markSessionActivity(sameDay)).toBe(4);
+  });
+
+  it('calculates streak boundaries using provided timezone', () => {
+    const profile = buildUser({ streakDays: 4, lastActiveDate: '2026-02-12' });
+
+    const beforeMidnightPacific = new Date('2026-02-13T07:30:00.000Z');
+    expect(markSessionActivity(profile, { now: beforeMidnightPacific, timeZone: 'America/Los_Angeles' })).toBe(4);
+
+    const afterMidnightPacific = new Date('2026-02-13T08:30:00.000Z');
+    expect(markSessionActivity(profile, { now: afterMidnightPacific, timeZone: 'America/Los_Angeles' })).toBe(5);
   });
 });
