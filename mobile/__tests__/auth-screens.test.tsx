@@ -17,6 +17,8 @@ jest.mock('../src/lib/api', () => ({
   refresh: jest.fn(),
   logout: jest.fn(),
   logoutAll: jest.fn(),
+  exportAccountData: jest.fn(),
+  deleteAccount: jest.fn(),
   fetchEntitlement: jest.fn(),
   syncEntitlement: jest.fn()
 }));
@@ -66,6 +68,30 @@ describe('mobile auth-driven screens', () => {
         unlimitedReviews: true,
         maxDueReviews: null
       }
+    });
+    (api.exportAccountData as jest.Mock).mockResolvedValue({
+      userId: 'u1',
+      email: 'u1@example.com',
+      generatedAt: new Date().toISOString(),
+      profile: {
+        userId: 'u1',
+        currentLevel: 'F2',
+        streakDays: 3,
+        skills: {},
+        entitlement: {
+          plan: 'free',
+          isActive: true,
+          source: 'none',
+          updatedAt: new Date().toISOString()
+        }
+      },
+      sessions: { total: 2, active: 1, refreshTokens: [] },
+      billing: { webhookEventsProcessed: 1, events: [] }
+    });
+    (api.deleteAccount as jest.Mock).mockResolvedValue({
+      userId: 'u1',
+      deleted: true,
+      deletedAt: new Date().toISOString()
     });
   });
 
@@ -322,6 +348,50 @@ describe('mobile auth-driven screens', () => {
         purchaseToken: 'sandbox-ios-restore-12345'
       });
       expect(screen.getByText('Pro access restored (sandbox).')).toBeTruthy();
+    });
+  });
+
+  it('exports and deletes account from profile', async () => {
+    const onLogout = jest.fn();
+    const auth = { accessToken: 'a', refreshToken: 'r', onTokensUpdated: jest.fn() };
+    (api.fetchEntitlement as jest.Mock).mockResolvedValue({
+      userId: 'u1',
+      entitlement: {
+        plan: 'free',
+        isActive: true,
+        source: 'none',
+        updatedAt: new Date().toISOString()
+      },
+      features: {
+        advancedTracks: false,
+        certificates: false,
+        streakRepair: false,
+        unlimitedReviews: false,
+        maxDueReviews: 3
+      }
+    });
+
+    const screen = render(<ProfileScreen onLogout={onLogout} userId="u1" auth={auth} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Export Account Data')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByText('Export Account Data'));
+    await waitFor(() => {
+      expect(api.exportAccountData).toHaveBeenCalledWith(auth);
+      expect(screen.getByText('Export ready: 2 sessions, 1 billing events.')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByText('Delete Account'));
+    await waitFor(() => {
+      expect(screen.getByText('Tap \"Delete Account\" again to confirm permanent deletion.')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByText('Delete Account'));
+    await waitFor(() => {
+      expect(api.deleteAccount).toHaveBeenCalledWith(auth);
+      expect(onLogout).toHaveBeenCalled();
     });
   });
 });

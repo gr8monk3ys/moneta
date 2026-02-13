@@ -1,5 +1,7 @@
 import {
   completeSession,
+  deleteAccount,
+  exportAccountData,
   fetchEntitlement,
   fetchProgress,
   fetchToday,
@@ -111,6 +113,41 @@ describe('mobile api auth retry', () => {
 
         return { ok: true, json: async () => ({}) } as Response;
       }
+      if (url.endsWith('/api/auth/account/export')) {
+        const authHeader = (init?.headers as Record<string, string>).Authorization;
+        if (authHeader === 'Bearer stale') {
+          return { ok: false, json: async () => ({ error: 'Invalid token' }) } as Response;
+        }
+
+        return {
+          ok: true,
+          json: async () => ({
+            userId: 'user-1',
+            email: 'u1@example.com',
+            generatedAt: new Date().toISOString(),
+            profile: {
+              userId: 'user-1',
+              currentLevel: 'F1',
+              streakDays: 1,
+              skills: {},
+              entitlement: {
+                plan: 'free',
+                isActive: true,
+                source: 'none',
+                updatedAt: new Date().toISOString()
+              }
+            },
+            sessions: { total: 1, active: 1, refreshTokens: [] },
+            billing: { webhookEventsProcessed: 0, events: [] }
+          })
+        } as Response;
+      }
+      if (url.endsWith('/api/auth/account') && init?.method === 'DELETE') {
+        return {
+          ok: true,
+          json: async () => ({ userId: 'user-1', deleted: true, deletedAt: new Date().toISOString() })
+        } as Response;
+      }
       if (url.endsWith('/api/learn/today/user-1')) {
         return { ok: false, json: async () => ({ error: 'Service unavailable' }) } as Response;
       }
@@ -193,6 +230,10 @@ describe('mobile api auth retry', () => {
     await logoutAll(auth);
     await submitPlacement(auth, { correctAnswers: 1, totalQuestions: 2 });
     await completeSession(auth, [{ skillId: 'budget', isCorrect: true }]);
+    const accountExport = await exportAccountData(auth);
+    expect(accountExport.userId).toBe('user-1');
+    const accountDelete = await deleteAccount(auth);
+    expect(accountDelete.deleted).toBe(true);
     const entitlement = await fetchEntitlement('user-1', auth);
     expect(entitlement.entitlement.plan).toBe('free');
     const upgraded = await syncEntitlement(auth, {

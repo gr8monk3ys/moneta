@@ -1,6 +1,15 @@
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { fetchEntitlement, logout, logoutAll, syncEntitlement, type AuthContext, type Entitlement } from '../lib/api';
+import {
+  deleteAccount as deleteAccountApi,
+  exportAccountData,
+  fetchEntitlement,
+  logout,
+  logoutAll,
+  syncEntitlement,
+  type AuthContext,
+  type Entitlement
+} from '../lib/api';
 import { disconnectStoreBilling, restoreLatestSubscription } from '../lib/storeBilling';
 import { theme } from '../lib/theme';
 
@@ -19,6 +28,9 @@ export function ProfileScreen(props: ProfileProps) {
   const [entitlement, setEntitlement] = useState<Entitlement | null>(null);
   const [loadingEntitlement, setLoadingEntitlement] = useState(true);
   const [restoring, setRestoring] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteArmed, setDeleteArmed] = useState(false);
 
   useEffect(() => {
     setLoadingEntitlement(true);
@@ -40,6 +52,7 @@ export function ProfileScreen(props: ProfileProps) {
 
   async function signOutCurrentSession() {
     try {
+      setDeleteArmed(false);
       await logout(props.auth.refreshToken);
       props.onLogout();
     } catch (error) {
@@ -49,6 +62,7 @@ export function ProfileScreen(props: ProfileProps) {
 
   async function signOutEverywhere() {
     try {
+      setDeleteArmed(false);
       await logoutAll(props.auth);
       props.onLogout();
     } catch (error) {
@@ -60,6 +74,7 @@ export function ProfileScreen(props: ProfileProps) {
     try {
       setRestoring(true);
       setMessage(null);
+      setDeleteArmed(false);
 
       const restoredPurchase = await restoreLatestSubscription();
       if (!restoredPurchase) {
@@ -86,6 +101,44 @@ export function ProfileScreen(props: ProfileProps) {
     }
   }
 
+  async function exportAccountSnapshot() {
+    try {
+      setExporting(true);
+      setMessage(null);
+      setDeleteArmed(false);
+
+      const snapshot = await exportAccountData(props.auth);
+      setMessage(
+        `Export ready: ${snapshot.sessions.total} sessions, ${snapshot.billing.webhookEventsProcessed} billing events.`
+      );
+    } catch (error) {
+      setMessage(formatError(error));
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  async function deleteAccount() {
+    if (!deleteArmed) {
+      setDeleteArmed(true);
+      setMessage('Tap "Delete Account" again to confirm permanent deletion.');
+      return;
+    }
+
+    try {
+      setDeleting(true);
+      setMessage(null);
+      await deleteAccountApi(props.auth);
+      setMessage('Account deleted.');
+      props.onLogout();
+    } catch (error) {
+      setMessage(formatError(error));
+    } finally {
+      setDeleting(false);
+      setDeleteArmed(false);
+    }
+  }
+
   return (
     <View style={styles.container}>
       <Text style={styles.name}>👤 {props.userId}</Text>
@@ -107,6 +160,14 @@ export function ProfileScreen(props: ProfileProps) {
         <Text style={styles.secondaryText}>Sign out all devices</Text>
       </Pressable>
 
+      <Pressable style={styles.secondaryButton} onPress={exportAccountSnapshot} disabled={exporting}>
+        <Text style={styles.secondaryText}>{exporting ? 'Exporting…' : 'Export Account Data'}</Text>
+      </Pressable>
+
+      <Pressable style={styles.dangerButton} onPress={deleteAccount} disabled={deleting}>
+        <Text style={styles.dangerText}>{deleting ? 'Deleting…' : 'Delete Account'}</Text>
+      </Pressable>
+
       {message ? <Text style={styles.message}>{message}</Text> : null}
     </View>
   );
@@ -121,5 +182,7 @@ const styles = StyleSheet.create({
   buttonText: { color: theme.textPrimary, textAlign: 'center', fontWeight: '700' },
   secondaryButton: { borderColor: theme.accent, borderWidth: 1, borderRadius: 12, padding: 12 },
   secondaryText: { color: theme.accent, textAlign: 'center', fontWeight: '700' },
+  dangerButton: { borderColor: theme.danger, borderWidth: 1, borderRadius: 12, padding: 12 },
+  dangerText: { color: theme.danger, textAlign: 'center', fontWeight: '700' },
   message: { color: theme.danger }
 });

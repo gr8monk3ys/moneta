@@ -79,6 +79,43 @@ export interface EntitlementResponse {
   features: FeatureAccess;
 }
 
+export interface AccountExportResponse {
+  userId: string;
+  email: string;
+  generatedAt: string;
+  profile: {
+    userId: string;
+    currentLevel: string;
+    streakDays: number;
+    lastActiveDate?: string;
+    skills: Record<string, { skillId: string; mastery: number; lastReviewedAt?: string; nextReviewAt?: string }>;
+    entitlement: Entitlement;
+  };
+  sessions: {
+    total: number;
+    active: number;
+    refreshTokens: Array<{
+      tokenId: string;
+      userId: string;
+      sessionId: string;
+      createdAt: string;
+      expiresAt: string;
+      revokedAt?: string;
+    }>;
+  };
+  billing: {
+    webhookEventsProcessed: number;
+    events: Array<{
+      eventId: string;
+      userId: string;
+      platform: 'ios' | 'android' | 'web';
+      productId: string;
+      payloadHash: string;
+      processedAt: string;
+    }>;
+  };
+}
+
 interface SyncEntitlementPayload {
   platform: 'ios' | 'android' | 'web';
   productId: string;
@@ -95,6 +132,23 @@ async function parseError(response: Response): Promise<never> {
 async function postJson<T>(path: string, payload: unknown, token?: string): Promise<T> {
   const response = await fetch(`${baseUrl}${path}`, {
     method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    return parseError(response);
+  }
+
+  return response.json() as Promise<T>;
+}
+
+async function deleteJson<T>(path: string, payload: unknown, token?: string): Promise<T> {
+  const response = await fetch(`${baseUrl}${path}`, {
+    method: 'DELETE',
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {})
@@ -187,6 +241,18 @@ export async function logout(refreshToken: string): Promise<void> {
 
 export async function logoutAll(auth: AuthContext): Promise<void> {
   await withAuthRetry(auth, (token) => postJson('/api/auth/logout-all', {}, token));
+}
+
+export async function exportAccountData(auth: AuthContext): Promise<AccountExportResponse> {
+  return withAuthRetry(auth, (token) => getJson<AccountExportResponse>('/api/auth/account/export', token));
+}
+
+export async function deleteAccount(auth: AuthContext): Promise<{ userId: string; deleted: boolean; deletedAt: string }> {
+  return withAuthRetry(auth, (token) => deleteJson<{ userId: string; deleted: boolean; deletedAt: string }>(
+    '/api/auth/account',
+    { confirmation: 'DELETE_ACCOUNT' },
+    token
+  ));
 }
 
 export async function fetchProgress(userId: string, auth: AuthContext): Promise<ProgressResponse> {

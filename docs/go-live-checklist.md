@@ -60,6 +60,7 @@ This checklist is organized by release criticality so the team can ship in contr
   - `EXPO_PUBLIC_IOS_SUBSCRIPTION_PRODUCT_IDS`
   - `EXPO_PUBLIC_ANDROID_SUBSCRIPTION_PRODUCT_IDS`
 - [ ] Verify secure auth persistence and logout flows on cold app restart.
+- [ ] Verify in-app account export/deletion flows meet App Store and Play policy requirements.
 
 ## P1 — Should complete in first post-launch sprint
 
