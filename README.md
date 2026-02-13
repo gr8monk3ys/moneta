@@ -8,6 +8,7 @@ An iOS / Android finance-learning platform.
 - [MVP API Documentation](docs/api.md)
 - [Operations Guide](docs/operations.md)
 - [Go-Live Checklist](docs/go-live-checklist.md)
+- [Release Evidence Template](docs/release-evidence-template.md)
 - [Multi-Agent Execution Plan](docs/multi-agent-execution-plan.md)
 - [PR Acceptance Checklist](docs/pr-acceptance-checklist.md)
 
@@ -73,6 +74,7 @@ Production readiness helper:
 - Run `./scripts/production-readiness-check.sh` in your deployment environment to verify required env vars and secure defaults before promoting traffic.
 - Run `./scripts/final-verification-gate.sh` before release sign-off to validate backend/mobile lint, tests, build, integration tests, and high/critical security audit gates.
 - If you intentionally need to skip integration tests locally, set `REQUIRE_INTEGRATION_TESTS=false` explicitly.
+- Run `NODE_ENV=production ./scripts/billing-release-readiness-check.sh` to validate billing provider/mobile SKU configuration before submitting store builds.
 
 Mobile:
 

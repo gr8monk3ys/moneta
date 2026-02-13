@@ -34,6 +34,7 @@
 
 ## Go-live checklist
 - Use `docs/go-live-checklist.md` as the release gate before enabling production traffic.
+- Record final verification and release sign-off evidence using `docs/release-evidence-template.md`.
 
 ## Production readiness verification
 - Run `./scripts/production-readiness-check.sh` before deployment to validate required production environment variables and reject insecure defaults.
@@ -43,6 +44,7 @@
 - Run `./scripts/final-verification-gate.sh` before release go/no-go.
 - Integration tests are required by default; set `REQUIRE_INTEGRATION_TESTS=false` only for explicit local-only runs.
 - The gate validates backend/mobile lint, unit tests, integration tests, backend build, and security audits at high/critical thresholds.
+- Set `REQUIRE_BILLING_RELEASE_CONFIG=true` to enforce production billing/mobile environment validation during release candidate checks.
 
 ## Billing verification and reconciliation
 - `POST /api/billing/entitlements/sync` verifies purchase tokens server-side against configured store providers before entitlement changes.
@@ -52,3 +54,8 @@
   - `APPLE_SHARED_SECRET` for iOS verification
   - `GOOGLE_PLAY_PACKAGE_NAME` + `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` for Android verification
   - `BILLING_ALLOW_SANDBOX_PURCHASES=false`
+- Run `./scripts/billing-release-readiness-check.sh` in release CI/CD with production env vars to validate:
+  - backend billing secrets and provider credentials
+  - mobile billing SKU variables
+  - `EXPO_PUBLIC_API_BASE_URL` HTTPS requirement
+  - sandbox billing disabled in production
