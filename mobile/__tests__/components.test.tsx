@@ -3,11 +3,19 @@ import { BottomNav } from '../src/components/BottomNav';
 import { LearnScreen } from '../src/screens/LearnScreen';
 import { ProgressScreen } from '../src/screens/ProgressScreen';
 import * as api from '../src/lib/api';
+import * as storeBilling from '../src/lib/storeBilling';
 
 jest.mock('../src/lib/api', () => ({
   ...jest.requireActual('../src/lib/api'),
   fetchToday: jest.fn(),
   fetchProgress: jest.fn()
+}));
+
+jest.mock('../src/lib/storeBilling', () => ({
+  listSubscriptionProducts: jest.fn().mockResolvedValue([]),
+  purchasePrimarySubscription: jest.fn().mockResolvedValue(null),
+  restoreLatestSubscription: jest.fn().mockResolvedValue(null),
+  disconnectStoreBilling: jest.fn().mockResolvedValue(undefined)
 }));
 
 const auth = {
@@ -46,6 +54,14 @@ describe('mobile presentational components', () => {
       plan: 'free',
       premiumActive: false
     });
+    (storeBilling.listSubscriptionProducts as jest.Mock).mockResolvedValue([
+      {
+        productId: 'moneta.pro.monthly',
+        title: 'Moneta Pro',
+        description: 'Monthly plan',
+        displayPrice: '$7.99'
+      }
+    ]);
   });
 
   it('changes tabs from bottom nav', () => {

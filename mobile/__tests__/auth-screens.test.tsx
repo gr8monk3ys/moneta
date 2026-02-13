@@ -1,8 +1,10 @@
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import { HomeScreen } from '../src/screens/HomeScreen';
+import { LearnScreen } from '../src/screens/LearnScreen';
 import { LoginScreen } from '../src/screens/LoginScreen';
 import { ProfileScreen } from '../src/screens/ProfileScreen';
 import * as api from '../src/lib/api';
+import * as storeBilling from '../src/lib/storeBilling';
 
 jest.mock('../src/lib/api', () => ({
   ...jest.requireActual('../src/lib/api'),
@@ -19,7 +21,54 @@ jest.mock('../src/lib/api', () => ({
   syncEntitlement: jest.fn()
 }));
 
+jest.mock('../src/lib/storeBilling', () => ({
+  listSubscriptionProducts: jest.fn().mockResolvedValue([]),
+  purchasePrimarySubscription: jest.fn().mockResolvedValue(null),
+  restoreLatestSubscription: jest.fn().mockResolvedValue(null),
+  disconnectStoreBilling: jest.fn().mockResolvedValue(undefined)
+}));
+
 describe('mobile auth-driven screens', () => {
+  beforeEach(() => {
+    (storeBilling.listSubscriptionProducts as jest.Mock).mockResolvedValue([
+      {
+        productId: 'moneta.pro.monthly',
+        title: 'Moneta Pro',
+        description: 'Monthly plan',
+        displayPrice: '$7.99'
+      }
+    ]);
+    (storeBilling.purchasePrimarySubscription as jest.Mock).mockResolvedValue({
+      platform: 'ios',
+      productId: 'moneta.pro.monthly',
+      purchaseToken: 'sandbox-ios-12345',
+      sandbox: true
+    });
+    (storeBilling.restoreLatestSubscription as jest.Mock).mockResolvedValue({
+      platform: 'ios',
+      productId: 'moneta.pro.monthly',
+      purchaseToken: 'sandbox-ios-restore-12345',
+      sandbox: true
+    });
+    (api.syncEntitlement as jest.Mock).mockResolvedValue({
+      userId: 'u1',
+      entitlement: {
+        plan: 'pro',
+        isActive: true,
+        source: 'ios',
+        productId: 'moneta.pro.monthly',
+        updatedAt: new Date().toISOString()
+      },
+      features: {
+        advancedTracks: true,
+        certificates: true,
+        streakRepair: true,
+        unlimitedReviews: true,
+        maxDueReviews: null
+      }
+    });
+  });
+
   afterEach(() => {
     jest.clearAllMocks();
   });
@@ -154,6 +203,46 @@ describe('mobile auth-driven screens', () => {
     });
   });
 
+  it('syncs entitlement after in-app purchase', async () => {
+    const auth = { accessToken: 'a', refreshToken: 'r', onTokensUpdated: jest.fn() };
+    (api.fetchToday as jest.Mock).mockResolvedValue({
+      userId: 'u1',
+      dueReviews: [],
+      nextLesson: { lessonId: 'l1', title: 'Next Up', estimatedMinutes: 5 },
+      entitlement: {
+        plan: 'free',
+        isActive: true,
+        source: 'none',
+        updatedAt: new Date().toISOString()
+      },
+      features: {
+        advancedTracks: false,
+        certificates: false,
+        streakRepair: false,
+        unlimitedReviews: false,
+        maxDueReviews: 3
+      }
+    });
+
+    const screen = render(<LearnScreen userId="u1" auth={auth} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Up next: Next Up')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByText('Upgrade to Pro'));
+
+    await waitFor(() => {
+      expect(storeBilling.purchasePrimarySubscription).toHaveBeenCalledWith('u1');
+      expect(api.syncEntitlement).toHaveBeenCalledWith(auth, {
+        platform: 'ios',
+        productId: 'moneta.pro.monthly',
+        purchaseToken: 'sandbox-ios-12345'
+      });
+      expect(screen.getByText('Moneta Pro unlocked in sandbox mode.')).toBeTruthy();
+    });
+  });
+
   it('supports profile sign-out actions and errors', async () => {
     const onLogout = jest.fn();
     const auth = { accessToken: 'a', refreshToken: 'r', onTokensUpdated: jest.fn() };
@@ -176,6 +265,10 @@ describe('mobile auth-driven screens', () => {
 
     const screen = render(<ProfileScreen onLogout={onLogout} userId="u1" auth={auth} />);
 
+    await waitFor(() => {
+      expect(api.fetchEntitlement).toHaveBeenCalled();
+    });
+
     fireEvent.press(screen.getByText('Sign out this device'));
     fireEvent.press(screen.getByText('Sign out all devices'));
 
@@ -190,6 +283,45 @@ describe('mobile auth-driven screens', () => {
 
     await waitFor(() => {
       expect(screen.getByText('logout failed')).toBeTruthy();
+    });
+  });
+
+  it('restores purchases from store and syncs entitlement', async () => {
+    const onLogout = jest.fn();
+    const auth = { accessToken: 'a', refreshToken: 'r', onTokensUpdated: jest.fn() };
+    (api.fetchEntitlement as jest.Mock).mockResolvedValue({
+      userId: 'u1',
+      entitlement: {
+        plan: 'free',
+        isActive: true,
+        source: 'none',
+        updatedAt: new Date().toISOString()
+      },
+      features: {
+        advancedTracks: false,
+        certificates: false,
+        streakRepair: false,
+        unlimitedReviews: false,
+        maxDueReviews: 3
+      }
+    });
+
+    const screen = render(<ProfileScreen onLogout={onLogout} userId="u1" auth={auth} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Restore Pro Access')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByText('Restore Pro Access'));
+
+    await waitFor(() => {
+      expect(storeBilling.restoreLatestSubscription).toHaveBeenCalled();
+      expect(api.syncEntitlement).toHaveBeenCalledWith(auth, {
+        platform: 'ios',
+        productId: 'moneta.pro.monthly',
+        purchaseToken: 'sandbox-ios-restore-12345'
+      });
+      expect(screen.getByText('Pro access restored (sandbox).')).toBeTruthy();
     });
   });
 });

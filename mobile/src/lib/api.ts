@@ -83,8 +83,6 @@ interface SyncEntitlementPayload {
   platform: 'ios' | 'android' | 'web';
   productId: string;
   purchaseToken: string;
-  isActive?: boolean;
-  currentPeriodEndsAt?: string;
 }
 
 const refreshInflight = new Map<string, Promise<AuthResponse>>();

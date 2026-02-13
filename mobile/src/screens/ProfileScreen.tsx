@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { fetchEntitlement, logout, logoutAll, syncEntitlement, type AuthContext, type Entitlement } from '../lib/api';
+import { disconnectStoreBilling, restoreLatestSubscription } from '../lib/storeBilling';
 import { theme } from '../lib/theme';
 
 interface ProfileProps {
@@ -17,6 +18,7 @@ export function ProfileScreen(props: ProfileProps) {
   const [message, setMessage] = useState<string | null>(null);
   const [entitlement, setEntitlement] = useState<Entitlement | null>(null);
   const [loadingEntitlement, setLoadingEntitlement] = useState(true);
+  const [restoring, setRestoring] = useState(false);
 
   useEffect(() => {
     setLoadingEntitlement(true);
@@ -30,6 +32,10 @@ export function ProfileScreen(props: ProfileProps) {
       .finally(() => {
         setLoadingEntitlement(false);
       });
+
+    return () => {
+      disconnectStoreBilling().catch(() => undefined);
+    };
   }, [props.auth, props.userId]);
 
   async function signOutCurrentSession() {
@@ -52,18 +58,31 @@ export function ProfileScreen(props: ProfileProps) {
 
   async function restorePurchase() {
     try {
+      setRestoring(true);
       setMessage(null);
+
+      const restoredPurchase = await restoreLatestSubscription();
+      if (!restoredPurchase) {
+        setMessage('No active subscription was found to restore.');
+        return;
+      }
+
       const response = await syncEntitlement(props.auth, {
-        platform: 'ios',
-        productId: 'moneta.pro.monthly',
-        purchaseToken: `restore-${Date.now()}`,
-        isActive: true,
-        currentPeriodEndsAt: new Date(Date.now() + 30 * 86_400_000).toISOString()
+        platform: restoredPurchase.platform,
+        productId: restoredPurchase.productId,
+        purchaseToken: restoredPurchase.purchaseToken
       });
+
       setEntitlement(response.entitlement);
-      setMessage('Pro access restored.');
+      if (response.entitlement.plan === 'pro') {
+        setMessage(restoredPurchase.sandbox ? 'Pro access restored (sandbox).' : 'Pro access restored.');
+      } else {
+        setMessage('Subscription restored, but no active Pro entitlement was found.');
+      }
     } catch (error) {
       setMessage(formatError(error));
+    } finally {
+      setRestoring(false);
     }
   }
 
@@ -75,8 +94,8 @@ export function ProfileScreen(props: ProfileProps) {
         Plan: {loadingEntitlement ? 'Loading…' : entitlement?.plan === 'pro' ? 'Pro' : 'Free'}
       </Text>
       {!loadingEntitlement && entitlement?.plan !== 'pro' ? (
-        <Pressable style={styles.button} onPress={restorePurchase}>
-          <Text style={styles.buttonText}>Restore Pro Access</Text>
+        <Pressable style={styles.button} onPress={restorePurchase} disabled={restoring}>
+          <Text style={styles.buttonText}>{restoring ? 'Restoring…' : 'Restore Pro Access'}</Text>
         </Pressable>
       ) : null}
 
