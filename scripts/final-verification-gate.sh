@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REQUIRE_INTEGRATION_TESTS="${REQUIRE_INTEGRATION_TESTS:-true}"
+REQUIRE_BILLING_RELEASE_CONFIG="${REQUIRE_BILLING_RELEASE_CONFIG:-false}"
 
 run_step() {
   local label="$1"
@@ -14,6 +15,7 @@ run_step() {
 
 echo "Running Moneta final verification gate from: ${ROOT_DIR}"
 echo "REQUIRE_INTEGRATION_TESTS=${REQUIRE_INTEGRATION_TESTS}"
+echo "REQUIRE_BILLING_RELEASE_CONFIG=${REQUIRE_BILLING_RELEASE_CONFIG}"
 
 cd "${ROOT_DIR}"
 
@@ -35,6 +37,14 @@ fi
 
 run_step "Backend build" npm run build
 run_step "Backend security audit (high/critical)" npm audit --audit-level=high
+
+if [[ "${REQUIRE_BILLING_RELEASE_CONFIG}" == "true" ]]; then
+  run_step "Billing release readiness config" ./scripts/billing-release-readiness-check.sh
+else
+  echo
+  echo "== Billing release readiness config =="
+  echo "Skipping: set REQUIRE_BILLING_RELEASE_CONFIG=true to enforce production billing env checks."
+fi
 
 pushd "${ROOT_DIR}/mobile" >/dev/null
 run_step "Mobile lint" npm run lint

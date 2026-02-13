@@ -28,6 +28,7 @@ This checklist is organized by release criticality so the team can ship in contr
 - [ ] Configure `CORS_ORIGINS` to explicit production domains only.
 - [ ] Set `TRUST_PROXY=true` when running behind a load balancer or reverse proxy.
 - [ ] Ensure `BILLING_ALLOW_SANDBOX_PURCHASES=false` in production.
+- [ ] Run `./scripts/billing-release-readiness-check.sh` with production release env vars and resolve all failures.
 
 ### Data and database safety
 - [ ] Confirm all migrations apply cleanly on a production-like database snapshot.
@@ -55,6 +56,9 @@ This checklist is organized by release criticality so the team can ship in contr
 ### Mobile production readiness
 - [ ] Validate Expo build profiles for production (`eas`/store pipeline as applicable).
 - [ ] Confirm `EXPO_PUBLIC_API_BASE_URL` points to production API over HTTPS.
+- [ ] Confirm store SKU env vars are set for release builds:
+  - `EXPO_PUBLIC_IOS_SUBSCRIPTION_PRODUCT_IDS`
+  - `EXPO_PUBLIC_ANDROID_SUBSCRIPTION_PRODUCT_IDS`
 - [ ] Verify secure auth persistence and logout flows on cold app restart.
 
 ## P1 — Should complete in first post-launch sprint
