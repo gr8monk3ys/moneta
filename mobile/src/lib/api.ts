@@ -58,6 +58,24 @@ export interface TodayResponse {
   features: FeatureAccess;
 }
 
+export interface PathLesson {
+  lessonId: string;
+  title: string;
+  summary: string;
+  level: string;
+  track: 'core' | 'advanced';
+  premium: boolean;
+  estimatedMinutes: number;
+  locked: boolean;
+}
+
+export interface PathResponse {
+  userId: string;
+  entitlement: Entitlement;
+  features: FeatureAccess;
+  lessons: PathLesson[];
+}
+
 interface PlacementResponse {
   userId: string;
   level: string;
@@ -261,6 +279,10 @@ export async function fetchProgress(userId: string, auth: AuthContext): Promise<
 
 export async function fetchToday(userId: string, auth: AuthContext): Promise<TodayResponse> {
   return withAuthRetry(auth, (token) => getJson<TodayResponse>(`/api/learn/today/${userId}`, token));
+}
+
+export async function fetchLearningPath(userId: string, auth: AuthContext): Promise<PathResponse> {
+  return withAuthRetry(auth, (token) => getJson<PathResponse>(`/api/learn/path/${userId}`, token));
 }
 
 export async function fetchEntitlement(userId: string, auth: AuthContext): Promise<EntitlementResponse> {

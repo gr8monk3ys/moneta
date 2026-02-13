@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { fetchToday, syncEntitlement, type AuthContext } from '../lib/api';
+import { fetchLearningPath, fetchToday, syncEntitlement, type AuthContext, type PathLesson } from '../lib/api';
 import { disconnectStoreBilling, listSubscriptionProducts, purchasePrimarySubscription } from '../lib/storeBilling';
 import { theme } from '../lib/theme';
 
@@ -8,8 +8,6 @@ interface LearnScreenProps {
   userId: string;
   auth: AuthContext;
 }
-
-const path = ['Money Basics', 'Credit & Debt', 'Saving Safety', 'Investing Basics', 'Retirement', 'Taxes'];
 
 function formatError(error: unknown): string {
   return error instanceof Error ? error.message : 'Unknown error';
@@ -20,6 +18,7 @@ export function LearnScreen(props: LearnScreenProps) {
   const [advancedTracksUnlocked, setAdvancedTracksUnlocked] = useState(false);
   const [planLabel, setPlanLabel] = useState('Free');
   const [priceLabel, setPriceLabel] = useState<string | null>(null);
+  const [lessons, setLessons] = useState<PathLesson[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
@@ -29,10 +28,14 @@ export function LearnScreen(props: LearnScreenProps) {
     setError(null);
 
     try {
-      const today = await fetchToday(props.userId, props.auth);
+      const [today, path] = await Promise.all([
+        fetchToday(props.userId, props.auth),
+        fetchLearningPath(props.userId, props.auth)
+      ]);
       setNextLesson(today.nextLesson?.title ?? null);
       setAdvancedTracksUnlocked(today.features.advancedTracks);
       setPlanLabel(today.entitlement.plan === 'pro' ? 'Pro' : 'Free');
+      setLessons(path.lessons);
     } catch (reason) {
       setError(formatError(reason));
     } finally {
@@ -101,13 +104,16 @@ export function LearnScreen(props: LearnScreenProps) {
         </View>
       ) : null}
 
-      {path.map((item, index) => {
-        const locked = !advancedTracksUnlocked && index >= 3;
+      {lessons.length === 0 ? (
+        <Text style={styles.subtitle}>No lessons published yet.</Text>
+      ) : lessons.map((lesson, index) => {
+        const locked = lesson.locked;
         return (
-          <View key={item} style={[styles.node, index === 0 && styles.activeNode, locked && styles.lockedNode]}>
+          <View key={lesson.lessonId} style={[styles.node, index === 0 && styles.activeNode, locked && styles.lockedNode]}>
             <Text style={[styles.nodeText, index === 0 && styles.activeNodeText, locked && styles.lockedNodeText]}>
-              {index + 1}. {item}{locked ? ' (Pro)' : ''}
+              {index + 1}. {lesson.title}{locked ? ' (Pro)' : ''}
             </Text>
+            <Text style={styles.nodeMeta}>{lesson.level} • {lesson.track} • {lesson.estimatedMinutes} min</Text>
           </View>
         );
       })}
@@ -132,6 +138,7 @@ const styles = StyleSheet.create({
   activeNode: { borderColor: theme.accent, borderWidth: 1, backgroundColor: '#2d2620' },
   lockedNode: { opacity: 0.65 },
   nodeText: { color: theme.textPrimary, fontWeight: '600' },
+  nodeMeta: { color: theme.textMuted, marginTop: 4, fontSize: 12 },
   activeNodeText: { color: theme.accent },
   lockedNodeText: { color: theme.textMuted }
 });

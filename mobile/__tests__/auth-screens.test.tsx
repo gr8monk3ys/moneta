@@ -12,6 +12,7 @@ jest.mock('../src/lib/api', () => ({
   register: jest.fn(),
   fetchProgress: jest.fn(),
   fetchToday: jest.fn(),
+  fetchLearningPath: jest.fn(),
   submitPlacement: jest.fn(),
   completeSession: jest.fn(),
   refresh: jest.fn(),
@@ -68,6 +69,44 @@ describe('mobile auth-driven screens', () => {
         unlimitedReviews: true,
         maxDueReviews: null
       }
+    });
+    (api.fetchLearningPath as jest.Mock).mockResolvedValue({
+      userId: 'u1',
+      entitlement: {
+        plan: 'free',
+        isActive: true,
+        source: 'none',
+        updatedAt: new Date().toISOString()
+      },
+      features: {
+        advancedTracks: false,
+        certificates: false,
+        streakRepair: false,
+        unlimitedReviews: false,
+        maxDueReviews: 3
+      },
+      lessons: [
+        {
+          lessonId: 'lesson-cash-flow-f1-001',
+          title: 'Money Basics',
+          summary: 'Basics',
+          level: 'F1',
+          track: 'core',
+          premium: false,
+          estimatedMinutes: 5,
+          locked: false
+        },
+        {
+          lessonId: 'lesson-retirement-income-f4-001',
+          title: 'Retirement Income Planning',
+          summary: 'Advanced',
+          level: 'F4',
+          track: 'advanced',
+          premium: true,
+          estimatedMinutes: 9,
+          locked: true
+        }
+      ]
     });
     (api.exportAccountData as jest.Mock).mockResolvedValue({
       userId: 'u1',

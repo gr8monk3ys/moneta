@@ -9,6 +9,7 @@ An iOS / Android finance-learning platform.
 - [Operations Guide](docs/operations.md)
 - [Go-Live Checklist](docs/go-live-checklist.md)
 - [Release Evidence Template](docs/release-evidence-template.md)
+- [Content Inventory (2026-02-13)](docs/content-inventory-2026-02-13.md)
 - [Observability Production Setup](docs/observability-production-setup.md)
 - [Secret Rotation Policy](docs/security-secret-rotation-policy.md)
 - [External Go-Live Execution Guide](docs/external-go-live-execution-guide.md)
