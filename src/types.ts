@@ -1,4 +1,15 @@
 export type FinanceLevel = 'F1' | 'F2' | 'F3' | 'F4' | 'F5' | 'F6';
+export type SubscriptionPlan = 'free' | 'pro';
+export type EntitlementSource = 'none' | 'ios' | 'android' | 'web' | 'admin';
+
+export interface SubscriptionEntitlement {
+  plan: SubscriptionPlan;
+  isActive: boolean;
+  source: EntitlementSource;
+  productId?: string;
+  currentPeriodEndsAt?: string;
+  updatedAt: string;
+}
 
 export interface SkillState {
   skillId: string;
@@ -13,6 +24,7 @@ export interface UserProfile {
   streakDays: number;
   lastActiveDate?: string;
   skills: Record<string, SkillState>;
+  entitlement: SubscriptionEntitlement;
 }
 
 export interface AuthUser {

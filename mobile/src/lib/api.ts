@@ -7,6 +7,26 @@ interface AuthPayload {
   sessionId?: string;
 }
 
+export type SubscriptionPlan = 'free' | 'pro';
+export type EntitlementSource = 'none' | 'ios' | 'android' | 'web' | 'admin';
+
+export interface Entitlement {
+  plan: SubscriptionPlan;
+  isActive: boolean;
+  source: EntitlementSource;
+  productId?: string;
+  currentPeriodEndsAt?: string;
+  updatedAt: string;
+}
+
+export interface FeatureAccess {
+  advancedTracks: boolean;
+  certificates: boolean;
+  streakRepair: boolean;
+  unlimitedReviews: boolean;
+  maxDueReviews: number | null;
+}
+
 export interface AuthResponse {
   accessToken: string;
   refreshToken: string;
@@ -26,12 +46,16 @@ export interface ProgressResponse {
   streakDays: number;
   masteredSkills: number;
   totalSkills: number;
+  plan: SubscriptionPlan;
+  premiumActive: boolean;
 }
 
 export interface TodayResponse {
   userId: string;
   dueReviews: Array<{ itemId: string; skillId: string; dueDate: string }>;
   nextLesson?: { lessonId: string; title: string; estimatedMinutes: number };
+  entitlement: Entitlement;
+  features: FeatureAccess;
 }
 
 interface PlacementResponse {
@@ -47,6 +71,20 @@ interface SessionResponse {
 
 interface HealthResponse {
   status: string;
+}
+
+export interface EntitlementResponse {
+  userId: string;
+  entitlement: Entitlement;
+  features: FeatureAccess;
+}
+
+interface SyncEntitlementPayload {
+  platform: 'ios' | 'android' | 'web';
+  productId: string;
+  purchaseToken: string;
+  isActive: boolean;
+  currentPeriodEndsAt?: string;
 }
 
 const refreshInflight = new Map<string, Promise<AuthResponse>>();
@@ -159,6 +197,14 @@ export async function fetchProgress(userId: string, auth: AuthContext): Promise<
 
 export async function fetchToday(userId: string, auth: AuthContext): Promise<TodayResponse> {
   return withAuthRetry(auth, (token) => getJson<TodayResponse>(`/api/learn/today/${userId}`, token));
+}
+
+export async function fetchEntitlement(userId: string, auth: AuthContext): Promise<EntitlementResponse> {
+  return withAuthRetry(auth, (token) => getJson<EntitlementResponse>(`/api/billing/entitlements/${userId}`, token));
+}
+
+export async function syncEntitlement(auth: AuthContext, payload: SyncEntitlementPayload): Promise<EntitlementResponse> {
+  return withAuthRetry(auth, (token) => postJson<EntitlementResponse>('/api/billing/entitlements/sync', payload, token));
 }
 
 export async function submitPlacement(auth: AuthContext, score: { correctAnswers: number; totalQuestions: number }): Promise<PlacementResponse> {

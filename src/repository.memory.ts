@@ -1,3 +1,4 @@
+import { normalizeEntitlement } from './billing.js';
 import { users } from './data.js';
 import type { ConsumeRefreshTokenInput, UserRepository } from './repository.js';
 import type { AuthUser, RefreshTokenRecord, UserProfile } from './types.js';
@@ -16,12 +17,24 @@ export class InMemoryUserRepository implements UserRepository {
   }
 
   public async getUserProfile(userId: string): Promise<UserProfile | null> {
-    return users[userId] ?? null;
+    const existing = users[userId];
+    if (!existing) {
+      return null;
+    }
+
+    return {
+      ...existing,
+      entitlement: normalizeEntitlement(existing.entitlement)
+    };
   }
 
   public async upsertUserProfile(profile: UserProfile): Promise<UserProfile> {
-    users[profile.userId] = profile;
-    return profile;
+    const normalized: UserProfile = {
+      ...profile,
+      entitlement: normalizeEntitlement(profile.entitlement)
+    };
+    users[profile.userId] = normalized;
+    return normalized;
   }
 
   public async storeRefreshToken(record: RefreshTokenRecord): Promise<void> {

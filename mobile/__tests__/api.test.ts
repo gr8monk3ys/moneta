@@ -1,11 +1,13 @@
 import {
   completeSession,
+  fetchEntitlement,
   fetchProgress,
   fetchToday,
   logout,
   logoutAll,
   probeBackend,
   register,
+  syncEntitlement,
   submitPlacement,
   type AuthContext
 } from '../src/lib/api';
@@ -50,7 +52,9 @@ describe('mobile api auth retry', () => {
             currentLevel: 'F1',
             streakDays: 1,
             masteredSkills: 1,
-            totalSkills: 2
+            totalSkills: 2,
+            plan: 'free',
+            premiumActive: false
           })
         } as Response;
       }
@@ -110,6 +114,50 @@ describe('mobile api auth retry', () => {
       if (url.endsWith('/api/learn/today/user-1')) {
         return { ok: false, json: async () => ({ error: 'Service unavailable' }) } as Response;
       }
+      if (url.endsWith('/api/billing/entitlements/user-1')) {
+        return {
+          ok: true,
+          json: async () => ({
+            userId: 'user-1',
+            entitlement: {
+              plan: 'free',
+              isActive: true,
+              source: 'none',
+              updatedAt: new Date().toISOString()
+            },
+            features: {
+              advancedTracks: false,
+              certificates: false,
+              streakRepair: false,
+              unlimitedReviews: false,
+              maxDueReviews: 3
+            }
+          })
+        } as Response;
+      }
+      if (url.endsWith('/api/billing/entitlements/sync')) {
+        return {
+          ok: true,
+          json: async () => ({
+            userId: 'user-1',
+            entitlement: {
+              plan: 'pro',
+              isActive: true,
+              source: 'ios',
+              productId: 'moneta.pro.monthly',
+              currentPeriodEndsAt: new Date(Date.now() + 86_400_000).toISOString(),
+              updatedAt: new Date().toISOString()
+            },
+            features: {
+              advancedTracks: true,
+              certificates: true,
+              streakRepair: true,
+              unlimitedReviews: true,
+              maxDueReviews: null
+            }
+          })
+        } as Response;
+      }
       if (url.endsWith('/api/onboarding/placement')) {
         return {
           ok: true,
@@ -145,6 +193,15 @@ describe('mobile api auth retry', () => {
     await logoutAll(auth);
     await submitPlacement(auth, { correctAnswers: 1, totalQuestions: 2 });
     await completeSession(auth, [{ skillId: 'budget', isCorrect: true }]);
+    const entitlement = await fetchEntitlement('user-1', auth);
+    expect(entitlement.entitlement.plan).toBe('free');
+    const upgraded = await syncEntitlement(auth, {
+      platform: 'ios',
+      productId: 'moneta.pro.monthly',
+      purchaseToken: 'sandbox-purchase-token-12345',
+      isActive: true
+    });
+    expect(upgraded.entitlement.plan).toBe('pro');
 
     await expect(fetchToday('user-1', auth)).rejects.toThrow('Service unavailable');
 

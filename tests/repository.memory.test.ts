@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { createDefaultEntitlement } from '../src/billing.js';
 import { InMemoryUserRepository } from '../src/repository.memory.js';
 
 describe('InMemoryUserRepository', () => {
@@ -10,7 +11,13 @@ describe('InMemoryUserRepository', () => {
     const auth = await repo.getAuthUserByEmail('a@example.com');
     expect(auth?.userId).toBe('u1');
 
-    await repo.upsertUserProfile({ userId: 'u1', currentLevel: 'F1', streakDays: 0, skills: {} });
+    await repo.upsertUserProfile({
+      userId: 'u1',
+      currentLevel: 'F1',
+      streakDays: 0,
+      skills: {},
+      entitlement: createDefaultEntitlement()
+    });
     const profile = await repo.getUserProfile('u1');
     expect(profile?.userId).toBe('u1');
 

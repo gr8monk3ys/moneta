@@ -8,6 +8,7 @@ import { metricsMiddleware } from './metrics.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import type { UserRepository } from './repository.js';
 import { registerAuthRoutes } from './routes/authRoutes.js';
+import { registerBillingRoutes } from './routes/billingRoutes.js';
 import { registerLearningRoutes } from './routes/learningRoutes.js';
 import { registerSystemRoutes } from './routes/systemRoutes.js';
 import type { RouteDeps } from './routes/types.js';
@@ -80,6 +81,7 @@ export function createApp(options: AppOptions): express.Express {
   registerSystemRoutes(app, deps);
   registerAuthRoutes(app, deps, authLimiter);
   registerLearningRoutes(app, deps);
+  registerBillingRoutes(app, deps);
 
   app.use(errorHandler);
   return app;
