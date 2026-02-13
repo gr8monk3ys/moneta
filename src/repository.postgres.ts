@@ -1,5 +1,5 @@
 import { Pool } from 'pg';
-import type { UserRepository } from './repository.js';
+import type { ConsumeRefreshTokenInput, UserRepository } from './repository.js';
 import type { AuthUser, RefreshTokenRecord, SkillState, UserProfile } from './types.js';
 
 function serializeSkills(skills: Record<string, SkillState>): string {
@@ -124,6 +124,32 @@ export class PostgresUserRepository implements UserRepository {
     const result = await this.pool.query(
       'SELECT token_id, user_id, session_id, token_hash, created_at, expires_at, revoked_at FROM refresh_tokens WHERE token_id = $1 LIMIT 1',
       [tokenId]
+    );
+
+    const row = result.rows[0];
+    return row ? toRefreshRecord(row as Record<string, unknown>) : null;
+  }
+
+  public async consumeRefreshToken(input: ConsumeRefreshTokenInput): Promise<RefreshTokenRecord | null> {
+    const result = await this.pool.query(
+      `
+      UPDATE refresh_tokens
+      SET revoked_at = $5::timestamptz
+      WHERE token_id = $1
+        AND user_id = $2
+        AND session_id = $3
+        AND token_hash = $4
+        AND revoked_at IS NULL
+        AND expires_at > $5::timestamptz
+      RETURNING token_id, user_id, session_id, token_hash, created_at, expires_at, revoked_at
+      `,
+      [
+        input.tokenId,
+        input.userId,
+        input.sessionId,
+        input.tokenHash,
+        input.nowIso
+      ]
     );
 
     const row = result.rows[0];

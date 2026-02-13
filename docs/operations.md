@@ -26,3 +26,8 @@
 ## Production readiness verification
 - Run `./scripts/production-readiness-check.sh` before deployment to validate required production environment variables and reject insecure defaults.
 - This script is intended as a preflight guardrail and should be wired into your deploy pipeline.
+
+## Final release verification gate
+- Run `./scripts/final-verification-gate.sh` before release go/no-go.
+- Optional strict mode: set `REQUIRE_INTEGRATION_TESTS=true` to fail if `DATABASE_URL` is missing.
+- The gate validates backend/mobile lint, tests, backend build, and security audits at high/critical thresholds.

@@ -120,6 +120,18 @@ describe('Moneta API auth + learning flow', () => {
     expect(reuseResponse.status).toBe(401);
   });
 
+  it('allows only one successful refresh for concurrent requests with the same token', async () => {
+    const { app, refreshToken } = await buildAuthedApp();
+
+    const [first, second] = await Promise.all([
+      request(app).post('/api/auth/refresh').send({ refreshToken }),
+      request(app).post('/api/auth/refresh').send({ refreshToken })
+    ]);
+
+    const statuses = [first.status, second.status].sort();
+    expect(statuses).toEqual([200, 401]);
+  });
+
   it('rejects malformed refresh token payload', async () => {
     const { app } = buildApp();
     const response = await request(app).post('/api/auth/refresh').send({ refreshToken: 'tiny' });

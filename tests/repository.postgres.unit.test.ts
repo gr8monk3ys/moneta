@@ -43,11 +43,19 @@ describe('PostgresUserRepository', () => {
     pool.query
       .mockResolvedValueOnce({ rows: [], rowCount: 0 })
       .mockResolvedValueOnce({ rows: [{ user_id: 'u1', current_level: 'F1', streak_days: 0, skills_json: 'not-json' }], rowCount: 1 })
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 })
       .mockResolvedValueOnce({ rows: [], rowCount: 0 });
 
     expect(await repo.getAuthUserByEmail('nobody@example.com')).toBeNull();
     expect((await repo.getUserProfile('u1'))?.skills).toEqual({});
     expect(await repo.getRefreshToken('missing')).toBeNull();
+    expect(await repo.consumeRefreshToken({
+      tokenId: 'missing',
+      userId: 'u1',
+      sessionId: 's1',
+      tokenHash: 'hash',
+      nowIso: '2026-01-01T00:00:00Z'
+    })).toBeNull();
   });
 
   it('executes write operations and readiness checks', async () => {
@@ -61,6 +69,18 @@ describe('PostgresUserRepository', () => {
       .mockResolvedValueOnce({})
       .mockResolvedValueOnce({})
       .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({
+        rows: [{
+          token_id: 't1',
+          user_id: 'u1',
+          session_id: 's1',
+          token_hash: 'h',
+          created_at: '2026-01-01',
+          expires_at: '2026-01-02',
+          revoked_at: '2026-01-01T00:00:10Z'
+        }],
+        rowCount: 1
+      })
       .mockResolvedValueOnce({ rowCount: 3 })
       .mockResolvedValueOnce({})
       .mockRejectedValueOnce(new Error('db down'));
@@ -71,6 +91,13 @@ describe('PostgresUserRepository', () => {
     await repo.revokeRefreshToken('t1');
     await repo.revokeRefreshTokensByUser('u1');
     await repo.revokeRefreshTokensBySession('u1', 's1');
+    expect(await repo.consumeRefreshToken({
+      tokenId: 't1',
+      userId: 'u1',
+      sessionId: 's1',
+      tokenHash: 'h',
+      nowIso: '2026-01-01T00:00:10Z'
+    })).toMatchObject({ tokenId: 't1', revokedAt: '2026-01-01T00:00:10.000Z' });
 
     expect(await repo.pruneExpiredRefreshTokens('2026-02-01')).toBe(3);
     expect(await repo.checkReadiness()).toBe(true);

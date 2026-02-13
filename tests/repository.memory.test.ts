@@ -4,6 +4,7 @@ import { InMemoryUserRepository } from '../src/repository.memory.js';
 describe('InMemoryUserRepository', () => {
   it('creates, fetches, revokes, and prunes refresh tokens', async () => {
     const repo = new InMemoryUserRepository();
+    const nowIso = new Date().toISOString();
 
     await repo.createAuthUser({ userId: 'u1', email: 'a@example.com', passwordHash: 'hash' });
     const auth = await repo.getAuthUserByEmail('a@example.com');
@@ -18,7 +19,7 @@ describe('InMemoryUserRepository', () => {
       userId: 'u1',
       sessionId: 's1',
       tokenHash: 'h1',
-      createdAt: new Date().toISOString(),
+      createdAt: nowIso,
       expiresAt: new Date(Date.now() + 60_000).toISOString()
     });
     await repo.storeRefreshToken({
@@ -26,9 +27,27 @@ describe('InMemoryUserRepository', () => {
       userId: 'u1',
       sessionId: 's2',
       tokenHash: 'h2',
-      createdAt: new Date().toISOString(),
+      createdAt: nowIso,
       expiresAt: new Date(Date.now() - 60_000).toISOString()
     });
+
+    const consumed = await repo.consumeRefreshToken({
+      tokenId: 't1',
+      userId: 'u1',
+      sessionId: 's1',
+      tokenHash: 'h1',
+      nowIso
+    });
+    expect(consumed?.tokenId).toBe('t1');
+
+    const consumedAgain = await repo.consumeRefreshToken({
+      tokenId: 't1',
+      userId: 'u1',
+      sessionId: 's1',
+      tokenHash: 'h1',
+      nowIso
+    });
+    expect(consumedAgain).toBeNull();
 
     await repo.revokeRefreshToken('t1');
     expect((await repo.getRefreshToken('t1'))?.revokedAt).toBeTruthy();

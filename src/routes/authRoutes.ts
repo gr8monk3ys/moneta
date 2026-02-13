@@ -102,22 +102,20 @@ async function refreshHandler(req: Request, res: Response, deps: RouteDeps): Pro
     throw new ApiError(401, 'Invalid refresh token');
   }
 
-  const tokenRecord = await deps.repository.getRefreshToken(claims.jti);
   const providedHash = hashToken(parsed.data.refreshToken);
-  if (!tokenRecord || tokenRecord.tokenHash !== providedHash || tokenRecord.userId !== claims.sub) {
+  const consumedToken = await deps.repository.consumeRefreshToken({
+    tokenId: claims.jti,
+    userId: claims.sub,
+    sessionId: claims.sid,
+    tokenHash: providedHash,
+    nowIso: new Date().toISOString()
+  });
+
+  if (!consumedToken) {
     throw new ApiError(401, 'Invalid refresh token');
   }
 
-  if (tokenRecord.revokedAt) {
-    throw new ApiError(401, 'Refresh token has been revoked');
-  }
-
-  if (new Date(tokenRecord.expiresAt).getTime() <= Date.now()) {
-    throw new ApiError(401, 'Refresh token expired');
-  }
-
-  await deps.repository.revokeRefreshToken(claims.jti);
-  const tokens = await issueTokenPair(deps, claims.sub, claims.email, claims.sid);
+  const tokens = await issueTokenPair(deps, claims.sub, claims.email, consumedToken.sessionId);
 
   res.status(200).json(tokens);
 }

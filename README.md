@@ -8,6 +8,8 @@ An iOS / Android finance-learning platform.
 - [MVP API Documentation](docs/api.md)
 - [Operations Guide](docs/operations.md)
 - [Go-Live Checklist](docs/go-live-checklist.md)
+- [Multi-Agent Execution Plan](docs/multi-agent-execution-plan.md)
+- [PR Acceptance Checklist](docs/pr-acceptance-checklist.md)
 
 ## Repository layout
 
@@ -49,20 +51,21 @@ Backend:
 
 - `PORT` (default: `3000`)
 - `NODE_ENV` (`development` or `production`)
-- `JWT_SECRET` (required in production)
-- `JWT_REFRESH_SECRET` (required in production)
+- `JWT_SECRET` (required in production, minimum 32 chars, must not be placeholder/default)
+- `JWT_REFRESH_SECRET` (required in production, minimum 32 chars, must not be placeholder/default, and must differ from `JWT_SECRET`)
 - `JWT_ACCESS_TTL_SECONDS` (default: `3600`)
 - `JWT_REFRESH_TTL_SECONDS` (default: `604800`)
 - `REFRESH_TOKEN_PRUNE_INTERVAL_SECONDS` (default: `300`)
 - `CORS_ORIGINS` (comma-separated allowlist)
 - `DATABASE_URL` (required in production; app exits if missing)
-- `METRICS_TOKEN` (required in production to access `GET /metrics` with `Authorization: Bearer <token>`)
+- `METRICS_TOKEN` (required in production, minimum 24 chars, to access `GET /metrics` with `Authorization: Bearer <token>`)
 - `RATE_LIMIT_REDIS_URL` (optional Redis store for distributed rate limiting; recommended in production)
 - `TRUST_PROXY` (`true`/`false`; defaults to `true` in production)
 
 Production readiness helper:
 
 - Run `./scripts/production-readiness-check.sh` in your deployment environment to verify required env vars and secure defaults before promoting traffic.
+- Run `./scripts/final-verification-gate.sh` before release sign-off to validate backend/mobile lint, tests, build, and high/critical security audit gates.
 
 Mobile:
 

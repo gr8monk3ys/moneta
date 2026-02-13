@@ -7,6 +7,11 @@ This checklist is organized by release criticality so the team can ship in contr
 ### Security and secrets
 - [ ] Rotate and securely store production secrets (`JWT_SECRET`, `JWT_REFRESH_SECRET`, `METRICS_TOKEN`) in a secret manager.
 - [ ] Enforce secret rotation policy (time-based + incident-triggered).
+- [ ] Verify secret policy requirements:
+  - `JWT_SECRET` and `JWT_REFRESH_SECRET` are each at least 32 characters.
+  - `JWT_SECRET` and `JWT_REFRESH_SECRET` are different values.
+  - `METRICS_TOKEN` is at least 24 characters.
+  - No placeholder/default-style values are used.
 - [ ] Ensure no secrets are logged (request bodies, auth headers, tokens).
 
 ### Runtime configuration

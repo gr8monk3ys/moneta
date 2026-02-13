@@ -1,5 +1,5 @@
 import { users } from './data.js';
-import type { UserRepository } from './repository.js';
+import type { ConsumeRefreshTokenInput, UserRepository } from './repository.js';
 import type { AuthUser, RefreshTokenRecord, UserProfile } from './types.js';
 
 export class InMemoryUserRepository implements UserRepository {
@@ -30,6 +30,30 @@ export class InMemoryUserRepository implements UserRepository {
 
   public async getRefreshToken(tokenId: string): Promise<RefreshTokenRecord | null> {
     return this.refreshTokens.get(tokenId) ?? null;
+  }
+
+  public async consumeRefreshToken(input: ConsumeRefreshTokenInput): Promise<RefreshTokenRecord | null> {
+    const record = this.refreshTokens.get(input.tokenId);
+    if (!record) {
+      return null;
+    }
+
+    const isMatch = (
+      record.userId === input.userId &&
+      record.sessionId === input.sessionId &&
+      record.tokenHash === input.tokenHash
+    );
+
+    if (!isMatch || record.revokedAt || new Date(record.expiresAt).getTime() <= new Date(input.nowIso).getTime()) {
+      return null;
+    }
+
+    this.refreshTokens.set(input.tokenId, {
+      ...record,
+      revokedAt: input.nowIso
+    });
+
+    return record;
   }
 
   public async revokeRefreshToken(tokenId: string): Promise<void> {
