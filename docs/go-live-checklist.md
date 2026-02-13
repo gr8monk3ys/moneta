@@ -27,7 +27,7 @@ This checklist is organized by release criticality so the team can ship in contr
 ### Data and database safety
 - [ ] Confirm all migrations apply cleanly on a production-like database snapshot.
 - [ ] Validate backup/restore procedures (full restore drill).
-- [ ] Define and test rollback procedure for both schema and app deploy.
+- [ ] Validate rollback procedure for both schema and app deploy (`current`/`previous` release symlink swap).
 
 ### API reliability
 - [ ] Enforce readiness/liveness probes in deployment platform (`/ready`, `/health`).
@@ -43,6 +43,8 @@ This checklist is organized by release criticality so the team can ship in contr
 - [ ] Require passing `lint`, `test`, and `build` jobs before merge/deploy.
 - [ ] Add required branch protection and prevent direct pushes to release branch.
 - [ ] Ensure deploy pipeline includes post-deploy health verification and rollback trigger.
+- [ ] Verify deploy concurrency guard is enabled (single production deployment at a time).
+- [ ] Confirm release retention policy (`KEEP_RELEASES`) and cleanup behavior are configured.
 
 ### Mobile production readiness
 - [ ] Validate Expo build profiles for production (`eas`/store pipeline as applicable).

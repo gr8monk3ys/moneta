@@ -10,6 +10,18 @@
 - Deployment logic is defined in `scripts/deploy.sh`.
 - Rollback logic is defined in `scripts/rollback.sh`.
 - Configure `DEPLOY_KNOWN_HOSTS` as a repository secret to enforce SSH host-key verification during deploy and rollback.
+- Deployments are versioned under `<DEPLOY_PATH>/releases/<RELEASE_ID>` and switched atomically with symlinks:
+  - `<DEPLOY_PATH>/current` points to the live release.
+  - `<DEPLOY_PATH>/previous` points to the prior release for rollback.
+- `scripts/deploy.sh` builds the new release, updates symlinks, restarts service, and prunes old releases while preserving `current` and `previous`.
+- `scripts/rollback.sh` swaps `current` back to `previous` and restarts the same service.
+
+### Deploy-time variables
+- Required: `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_PATH`, `DEPLOY_KNOWN_HOSTS`
+- Optional:
+  - `DEPLOY_SERVICE_NAME` (defaults to `moneta`)
+  - `RELEASE_ID` (auto-generated if omitted)
+  - `KEEP_RELEASES` (defaults to `5`; must be >= 2)
 
 ## Alerting
 - `.github/workflows/alerts.yml` posts webhook notifications on CI/deploy failures.
