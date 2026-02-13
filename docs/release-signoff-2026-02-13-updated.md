@@ -2,7 +2,7 @@
 
 - Snapshot timestamp (UTC): `2026-02-13T07:35:00Z`
 - Branch: `gr8monk3ys/auth-security-hardening`
-- Commit: `<pending>`
+- Commit: `4c46754`
 - Overall decision: `NO-GO`
 - Reason: external production/store/legal validation blockers remain open.
 
