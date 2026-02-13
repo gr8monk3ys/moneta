@@ -13,6 +13,8 @@ interface DashboardState {
   reviews: string[];
   streak: string;
   nextLesson: string;
+  planBadge: string;
+  dueLimitNote: string | null;
 }
 
 function formatError(error: unknown): string {
@@ -24,7 +26,9 @@ export function HomeScreen(props: HomeProps) {
     progress: 'Loading progress…',
     reviews: [],
     streak: '—',
-    nextLesson: 'Loading lesson…'
+    nextLesson: 'Loading lesson…',
+    planBadge: 'Free',
+    dueLimitNote: null
   });
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
@@ -40,7 +44,11 @@ export function HomeScreen(props: HomeProps) {
         progress: `Level ${progress.currentLevel} • ${progress.masteredSkills}/${progress.totalSkills} mastered`,
         reviews: today.dueReviews.map((item) => item.skillId),
         streak: `${progress.streakDays}`,
-        nextLesson: today.nextLesson?.title ?? 'No lesson available'
+        nextLesson: today.nextLesson?.title ?? 'No lesson available',
+        planBadge: progress.plan === 'pro' && progress.premiumActive ? 'Pro' : 'Free',
+        dueLimitNote: typeof today.features.maxDueReviews === 'number'
+          ? `Free plan shows up to ${today.features.maxDueReviews} due reviews/day.`
+          : null
       });
     } catch (error) {
       setStatus(formatError(error));
@@ -107,6 +115,7 @@ export function HomeScreen(props: HomeProps) {
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.hero}>
         <Text style={styles.heroTitle}>Daily Goal: 10 min</Text>
+        <Text style={styles.planBadge}>Plan: {dashboard.planBadge}</Text>
         <Text style={styles.heroSubtitle}>{dashboard.progress}</Text>
         <Text style={styles.heroSubtitle}>Next: {dashboard.nextLesson}</Text>
       </View>
@@ -118,6 +127,7 @@ export function HomeScreen(props: HomeProps) {
         ) : (
           dashboard.reviews.map((review) => <Text key={review} style={styles.cardLine}>• {review}</Text>)
         )}
+        {dashboard.dueLimitNote ? <Text style={styles.limitNote}>{dashboard.dueLimitNote}</Text> : null}
       </View>
 
       <View style={styles.card}>
@@ -148,10 +158,12 @@ const styles = StyleSheet.create({
   content: { padding: 16, gap: 14 },
   hero: { backgroundColor: theme.cardElevated, borderRadius: 18, padding: 18, gap: 8 },
   heroTitle: { color: theme.textPrimary, fontSize: 20, fontWeight: '700' },
+  planBadge: { color: theme.accent, fontWeight: '700' },
   heroSubtitle: { color: theme.textMuted },
   card: { backgroundColor: theme.card, borderRadius: 16, padding: 16, gap: 6 },
   cardTitle: { color: theme.textPrimary, fontWeight: '700' },
   cardLine: { color: theme.textMuted },
+  limitNote: { color: theme.accent, fontSize: 12, marginTop: 6 },
   streak: { color: theme.success, fontWeight: '700', fontSize: 18 },
   actions: { gap: 10 },
   button: { backgroundColor: theme.accent, borderRadius: 12, padding: 12 },

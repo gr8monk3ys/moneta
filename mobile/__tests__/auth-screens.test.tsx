@@ -14,7 +14,9 @@ jest.mock('../src/lib/api', () => ({
   completeSession: jest.fn(),
   refresh: jest.fn(),
   logout: jest.fn(),
-  logoutAll: jest.fn()
+  logoutAll: jest.fn(),
+  fetchEntitlement: jest.fn(),
+  syncEntitlement: jest.fn()
 }));
 
 describe('mobile auth-driven screens', () => {
@@ -77,12 +79,27 @@ describe('mobile auth-driven screens', () => {
       currentLevel: 'F2',
       streakDays: 7,
       masteredSkills: 2,
-      totalSkills: 4
+      totalSkills: 4,
+      plan: 'free',
+      premiumActive: false
     });
     (api.fetchToday as jest.Mock).mockResolvedValue({
       userId: 'u1',
       dueReviews: [{ itemId: '1', skillId: 'budget', dueDate: new Date().toISOString() }],
-      nextLesson: { lessonId: 'l1', title: 'Next Up', estimatedMinutes: 5 }
+      nextLesson: { lessonId: 'l1', title: 'Next Up', estimatedMinutes: 5 },
+      entitlement: {
+        plan: 'free',
+        isActive: true,
+        source: 'none',
+        updatedAt: new Date().toISOString()
+      },
+      features: {
+        advancedTracks: false,
+        certificates: false,
+        streakRepair: false,
+        unlimitedReviews: false,
+        maxDueReviews: 3
+      }
     });
     (api.submitPlacement as jest.Mock).mockResolvedValue({ userId: 'u1', level: 'F3' });
     (api.completeSession as jest.Mock).mockResolvedValue({ userId: 'u1', streakDays: 8, scheduledReviews: [] });
@@ -140,6 +157,23 @@ describe('mobile auth-driven screens', () => {
   it('supports profile sign-out actions and errors', async () => {
     const onLogout = jest.fn();
     const auth = { accessToken: 'a', refreshToken: 'r', onTokensUpdated: jest.fn() };
+    (api.fetchEntitlement as jest.Mock).mockResolvedValue({
+      userId: 'u1',
+      entitlement: {
+        plan: 'free',
+        isActive: true,
+        source: 'none',
+        updatedAt: new Date().toISOString()
+      },
+      features: {
+        advancedTracks: false,
+        certificates: false,
+        streakRepair: false,
+        unlimitedReviews: false,
+        maxDueReviews: 3
+      }
+    });
+
     const screen = render(<ProfileScreen onLogout={onLogout} userId="u1" auth={auth} />);
 
     fireEvent.press(screen.getByText('Sign out this device'));

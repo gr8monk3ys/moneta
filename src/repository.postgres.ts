@@ -1,9 +1,14 @@
 import { Pool } from 'pg';
+import { normalizeEntitlement } from './billing.js';
 import type { ConsumeRefreshTokenInput, UserRepository } from './repository.js';
-import type { AuthUser, RefreshTokenRecord, SkillState, UserProfile } from './types.js';
+import type { AuthUser, RefreshTokenRecord, SkillState, SubscriptionEntitlement, UserProfile } from './types.js';
 
 function serializeSkills(skills: Record<string, SkillState>): string {
   return JSON.stringify(skills);
+}
+
+function serializeEntitlement(entitlement: SubscriptionEntitlement): string {
+  return JSON.stringify(entitlement);
 }
 
 function parseSkills(raw: unknown): Record<string, SkillState> {
@@ -15,6 +20,18 @@ function parseSkills(raw: unknown): Record<string, SkillState> {
     return JSON.parse(raw) as Record<string, SkillState>;
   } catch {
     return {};
+  }
+}
+
+function parseEntitlement(raw: unknown): SubscriptionEntitlement {
+  if (!raw || typeof raw !== 'string') {
+    return normalizeEntitlement(undefined);
+  }
+
+  try {
+    return normalizeEntitlement(JSON.parse(raw) as Partial<SubscriptionEntitlement>);
+  } catch {
+    return normalizeEntitlement(undefined);
   }
 }
 
@@ -61,7 +78,12 @@ export class PostgresUserRepository implements UserRepository {
 
   public async getUserProfile(userId: string): Promise<UserProfile | null> {
     const result = await this.pool.query(
-      'SELECT user_id, current_level, streak_days, last_active_date, skills_json FROM user_profiles WHERE user_id = $1 LIMIT 1',
+      `
+      SELECT user_id, current_level, streak_days, last_active_date, skills_json, entitlement_json
+      FROM user_profiles
+      WHERE user_id = $1
+      LIMIT 1
+      `,
       [userId]
     );
 
@@ -75,27 +97,30 @@ export class PostgresUserRepository implements UserRepository {
       currentLevel: String(row.current_level) as UserProfile['currentLevel'],
       streakDays: Number(row.streak_days),
       lastActiveDate: row.last_active_date ? String(row.last_active_date) : undefined,
-      skills: parseSkills(row.skills_json)
+      skills: parseSkills(row.skills_json),
+      entitlement: parseEntitlement(row.entitlement_json)
     };
   }
 
   public async upsertUserProfile(profile: UserProfile): Promise<UserProfile> {
     await this.pool.query(
       `
-      INSERT INTO user_profiles (user_id, current_level, streak_days, last_active_date, skills_json)
-      VALUES ($1, $2, $3, $4, $5)
+      INSERT INTO user_profiles (user_id, current_level, streak_days, last_active_date, skills_json, entitlement_json)
+      VALUES ($1, $2, $3, $4, $5, $6)
       ON CONFLICT (user_id) DO UPDATE SET
         current_level = EXCLUDED.current_level,
         streak_days = EXCLUDED.streak_days,
         last_active_date = EXCLUDED.last_active_date,
-        skills_json = EXCLUDED.skills_json
+        skills_json = EXCLUDED.skills_json,
+        entitlement_json = EXCLUDED.entitlement_json
       `,
       [
         profile.userId,
         profile.currentLevel,
         profile.streakDays,
         profile.lastActiveDate ?? null,
-        serializeSkills(profile.skills)
+        serializeSkills(profile.skills),
+        serializeEntitlement(profile.entitlement)
       ]
     );
 

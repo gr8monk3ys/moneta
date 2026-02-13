@@ -38,6 +38,8 @@ Calculates and stores finance level from placement results for the authenticated
 
 ### `GET /api/learn/today/:userId`
 Returns reviews that are currently due (based on persisted per-skill schedule) and next recommended lesson. `:userId` must match token subject.
+- Includes `entitlement` and `features` so clients can render free-vs-pro limits.
+- Free users are limited to a capped due-review queue (`features.maxDueReviews`), while active Pro users receive the full queue.
 
 ### `POST /api/sessions/complete`
 Stores item outcomes, updates streak, and schedules review items.
@@ -46,6 +48,19 @@ Stores item outcomes, updates streak, and schedules review items.
 
 ### `GET /api/progress/:userId`
 Returns level, streak, and mastery summary. `:userId` must match token subject.
+- Includes `plan` and `premiumActive` status.
+
+### `GET /api/billing/entitlements/:userId`
+Returns current subscription entitlement and feature access for the authenticated user. `:userId` must match token subject.
+
+### `POST /api/billing/entitlements/sync`
+Synchronizes entitlement state from a verified client purchase flow.
+- Body:
+  - `platform`: `ios | android | web`
+  - `productId`: store product identifier
+  - `purchaseToken`: platform purchase token or receipt reference (validated but not persisted)
+  - `isActive`: whether entitlement should be active
+  - `currentPeriodEndsAt` (optional): ISO timestamp for subscription period end
 
 ## Security and lifecycle controls
 

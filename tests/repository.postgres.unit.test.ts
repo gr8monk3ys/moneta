@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { createDefaultEntitlement } from '../src/billing.js';
 import { PostgresUserRepository } from '../src/repository.postgres.js';
 
 function buildPoolMock() {
@@ -20,7 +21,13 @@ describe('PostgresUserRepository', () => {
           current_level: 'F3',
           streak_days: 4,
           last_active_date: '2026-01-01',
-          skills_json: JSON.stringify({ skill: { skillId: 'skill', mastery: 0.8 } })
+          skills_json: JSON.stringify({ skill: { skillId: 'skill', mastery: 0.8 } }),
+          entitlement_json: JSON.stringify({
+            plan: 'pro',
+            isActive: true,
+            source: 'ios',
+            updatedAt: '2026-01-01T00:00:00.000Z'
+          })
         }],
         rowCount: 1
       })
@@ -33,6 +40,7 @@ describe('PostgresUserRepository', () => {
     expect(auth?.email).toBe('a@example.com');
     expect(profile?.currentLevel).toBe('F3');
     expect(profile?.skills.skill.mastery).toBe(0.8);
+    expect(profile?.entitlement.plan).toBe('pro');
     expect(token?.tokenId).toBe('t1');
   });
 
@@ -42,7 +50,16 @@ describe('PostgresUserRepository', () => {
 
     pool.query
       .mockResolvedValueOnce({ rows: [], rowCount: 0 })
-      .mockResolvedValueOnce({ rows: [{ user_id: 'u1', current_level: 'F1', streak_days: 0, skills_json: 'not-json' }], rowCount: 1 })
+      .mockResolvedValueOnce({
+        rows: [{
+          user_id: 'u1',
+          current_level: 'F1',
+          streak_days: 0,
+          skills_json: 'not-json',
+          entitlement_json: 'not-json'
+        }],
+        rowCount: 1
+      })
       .mockResolvedValueOnce({ rows: [], rowCount: 0 })
       .mockResolvedValueOnce({ rows: [], rowCount: 0 });
 
@@ -86,7 +103,13 @@ describe('PostgresUserRepository', () => {
       .mockRejectedValueOnce(new Error('db down'));
 
     await repo.createAuthUser({ userId: 'u1', email: 'x@example.com', passwordHash: 'hash' });
-    await repo.upsertUserProfile({ userId: 'u1', currentLevel: 'F1', streakDays: 0, skills: {} });
+    await repo.upsertUserProfile({
+      userId: 'u1',
+      currentLevel: 'F1',
+      streakDays: 0,
+      skills: {},
+      entitlement: createDefaultEntitlement()
+    });
     await repo.storeRefreshToken({ tokenId: 't1', userId: 'u1', sessionId: 's1', tokenHash: 'h', createdAt: '2026-01-01', expiresAt: '2026-01-02' });
     await repo.revokeRefreshToken('t1');
     await repo.revokeRefreshTokensByUser('u1');

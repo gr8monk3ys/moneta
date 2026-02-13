@@ -22,14 +22,29 @@ describe('mobile presentational components', () => {
     (api.fetchToday as jest.Mock).mockResolvedValue({
       userId: 'u1',
       dueReviews: [],
-      nextLesson: { lessonId: 'l1', title: 'Next Up', estimatedMinutes: 5 }
+      nextLesson: { lessonId: 'l1', title: 'Next Up', estimatedMinutes: 5 },
+      entitlement: {
+        plan: 'free',
+        isActive: true,
+        source: 'none',
+        updatedAt: new Date().toISOString()
+      },
+      features: {
+        advancedTracks: false,
+        certificates: false,
+        streakRepair: false,
+        unlimitedReviews: false,
+        maxDueReviews: 3
+      }
     });
     (api.fetchProgress as jest.Mock).mockResolvedValue({
       userId: 'u1',
       currentLevel: 'F2',
       streakDays: 7,
       masteredSkills: 2,
-      totalSkills: 4
+      totalSkills: 4,
+      plan: 'free',
+      premiumActive: false
     });
   });
 

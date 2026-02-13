@@ -1,5 +1,6 @@
 import request from 'supertest';
 import { describe, expect, it } from 'vitest';
+import { createDefaultEntitlement } from '../src/billing.js';
 import { createApp } from '../src/app.js';
 import { InMemoryUserRepository } from '../src/repository.memory.js';
 
@@ -249,6 +250,7 @@ describe('Moneta API auth + learning flow', () => {
       userId: 'review-user',
       currentLevel: 'F2',
       streakDays: 2,
+      entitlement: createDefaultEntitlement(),
       skills: {
         due: {
           skillId: 'due',
@@ -272,6 +274,95 @@ describe('Moneta API auth + learning flow', () => {
     expect(response.status).toBe(200);
     expect(response.body.dueReviews).toHaveLength(1);
     expect(response.body.dueReviews[0].skillId).toBe('due');
+  });
+
+  it('returns free entitlements by default and upgrades on sync', async () => {
+    const { app, accessToken } = await buildAuthedApp();
+
+    const initial = await request(app)
+      .get('/api/billing/entitlements/demo-user')
+      .set('Authorization', `Bearer ${accessToken}`);
+
+    expect(initial.status).toBe(200);
+    expect(initial.body.entitlement.plan).toBe('free');
+    expect(initial.body.features.unlimitedReviews).toBe(false);
+    expect(initial.body.features.maxDueReviews).toBe(3);
+
+    const upgraded = await request(app)
+      .post('/api/billing/entitlements/sync')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        platform: 'ios',
+        productId: 'moneta.pro.monthly',
+        purchaseToken: 'sandbox-purchase-token-12345',
+        isActive: true,
+        currentPeriodEndsAt: new Date(Date.now() + 86_400_000).toISOString()
+      });
+
+    expect(upgraded.status).toBe(200);
+    expect(upgraded.body.entitlement.plan).toBe('pro');
+    expect(upgraded.body.features.unlimitedReviews).toBe(true);
+    expect(upgraded.body.features.maxDueReviews).toBeNull();
+  });
+
+  it('limits due reviews for free users and unlocks full queue for pro users', async () => {
+    const { app, repository } = buildApp();
+
+    await request(app).post('/api/auth/register').send({
+      userId: 'paywall-user',
+      email: 'paywall-user@example.com',
+      password: 'password123'
+    });
+
+    const login = await request(app).post('/api/auth/login').send({
+      email: 'paywall-user@example.com',
+      password: 'password123'
+    });
+
+    const now = Date.now();
+    await repository.upsertUserProfile({
+      userId: 'paywall-user',
+      currentLevel: 'F2',
+      streakDays: 2,
+      entitlement: createDefaultEntitlement(),
+      skills: {
+        skill1: { skillId: 'skill1', mastery: 0.3, nextReviewAt: new Date(now - 5_000).toISOString() },
+        skill2: { skillId: 'skill2', mastery: 0.3, nextReviewAt: new Date(now - 4_000).toISOString() },
+        skill3: { skillId: 'skill3', mastery: 0.3, nextReviewAt: new Date(now - 3_000).toISOString() },
+        skill4: { skillId: 'skill4', mastery: 0.3, nextReviewAt: new Date(now - 2_000).toISOString() },
+        skill5: { skillId: 'skill5', mastery: 0.3, nextReviewAt: new Date(now - 1_000).toISOString() }
+      }
+    });
+
+    const freeToday = await request(app)
+      .get('/api/learn/today/paywall-user')
+      .set('Authorization', `Bearer ${login.body.accessToken as string}`);
+
+    expect(freeToday.status).toBe(200);
+    expect(freeToday.body.dueReviews).toHaveLength(3);
+    expect(freeToday.body.features.maxDueReviews).toBe(3);
+
+    const sync = await request(app)
+      .post('/api/billing/entitlements/sync')
+      .set('Authorization', `Bearer ${login.body.accessToken as string}`)
+      .send({
+        platform: 'android',
+        productId: 'moneta.pro.yearly',
+        purchaseToken: 'sandbox-purchase-token-67890',
+        isActive: true,
+        currentPeriodEndsAt: new Date(now + 7 * 86_400_000).toISOString()
+      });
+
+    expect(sync.status).toBe(200);
+
+    const proToday = await request(app)
+      .get('/api/learn/today/paywall-user')
+      .set('Authorization', `Bearer ${login.body.accessToken as string}`);
+
+    expect(proToday.status).toBe(200);
+    expect(proToday.body.dueReviews).toHaveLength(5);
+    expect(proToday.body.features.unlimitedReviews).toBe(true);
+    expect(proToday.body.features.maxDueReviews).toBeNull();
   });
 
   it('requires metrics token when configured and exposes health/readiness', async () => {

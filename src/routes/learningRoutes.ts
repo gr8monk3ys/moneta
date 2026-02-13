@@ -2,6 +2,7 @@ import type express from 'express';
 import type { NextFunction } from 'express';
 import { z } from 'zod';
 import { authenticateJwt, type AuthenticatedRequest } from '../auth.js';
+import { normalizeEntitlement, resolveFeatureAccess } from '../billing.js';
 import { lessons } from '../data.js';
 import { applyItemResult, isValidTimeZone, markSessionActivity, placeUser } from '../engine.js';
 import { ApiError } from '../errors.js';
@@ -50,20 +51,26 @@ async function findUserOrThrow(deps: RouteDeps, userId: string): Promise<UserPro
 function getProgressSummary(user: UserProfile) {
   const skillStates = Object.values(user.skills);
   const masteredSkills = skillStates.filter((skill) => skill.mastery >= 0.8).length;
+  const entitlement = normalizeEntitlement(user.entitlement);
+  const features = resolveFeatureAccess(entitlement);
 
   return {
     userId: user.userId,
     currentLevel: user.currentLevel,
     streakDays: user.streakDays,
     masteredSkills,
-    totalSkills: skillStates.length
+    totalSkills: skillStates.length,
+    plan: entitlement.plan,
+    premiumActive: features.unlimitedReviews
   };
 }
 
-function toDueReviews(user: UserProfile): ReviewItem[] {
+function toDueReviews(user: UserProfile): { dueReviews: ReviewItem[]; entitlement: UserProfile['entitlement']; features: ReturnType<typeof resolveFeatureAccess> } {
   const nowMs = Date.now();
+  const entitlement = normalizeEntitlement(user.entitlement);
+  const features = resolveFeatureAccess(entitlement);
 
-  return Object.values(user.skills)
+  const dueReviews = Object.values(user.skills)
     .filter((skill) => {
       if (!skill.nextReviewAt) {
         return false;
@@ -71,11 +78,22 @@ function toDueReviews(user: UserProfile): ReviewItem[] {
 
       return new Date(skill.nextReviewAt).getTime() <= nowMs;
     })
+    .sort((a, b) => {
+      const aMs = new Date(String(a.nextReviewAt)).getTime();
+      const bMs = new Date(String(b.nextReviewAt)).getTime();
+      return aMs - bMs;
+    })
     .map((skill) => ({
       itemId: `${skill.skillId}-due`,
       skillId: skill.skillId,
       dueDate: String(skill.nextReviewAt)
     }));
+
+  const limitedReviews = typeof features.maxDueReviews === 'number'
+    ? dueReviews.slice(0, features.maxDueReviews)
+    : dueReviews;
+
+  return { dueReviews: limitedReviews, entitlement, features };
 }
 
 function resolveTimeZone(...candidates: Array<string | undefined>): string {
@@ -109,9 +127,15 @@ export function registerLearningRoutes(app: express.Express, deps: RouteDeps): v
       const { userId } = validateParams(req.params);
       ensureSelfAccess(req, userId);
       const user = await findUserOrThrow(deps, userId);
-      const dueReviews = toDueReviews(user);
+      const today = toDueReviews(user);
       const nextLesson = lessons.find((lesson) => lesson.level === user.currentLevel) ?? lessons[0];
-      res.status(200).json({ userId, dueReviews, nextLesson });
+      res.status(200).json({
+        userId,
+        dueReviews: today.dueReviews,
+        nextLesson,
+        entitlement: today.entitlement,
+        features: today.features
+      });
     }).catch(next);
   });
 

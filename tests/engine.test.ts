@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { createDefaultEntitlement } from '../src/billing.js';
 import { applyItemResult, markSessionActivity, placeUser } from '../src/engine.js';
 import type { UserProfile } from '../src/types.js';
 
@@ -8,6 +9,7 @@ function buildUser(overrides: Partial<UserProfile> = {}): UserProfile {
     currentLevel: 'F1',
     streakDays: 0,
     skills: {},
+    entitlement: createDefaultEntitlement(),
     ...overrides
   };
 }

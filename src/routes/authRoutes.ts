@@ -2,6 +2,7 @@ import type express from 'express';
 import type { Request, Response } from 'express';
 import type { RateLimitRequestHandler } from 'express-rate-limit';
 import { z } from 'zod';
+import { createDefaultEntitlement } from '../billing.js';
 import {
   authenticateJwt,
   comparePassword,
@@ -65,7 +66,13 @@ async function registerHandler(req: Request, res: Response, deps: RouteDeps): Pr
 
   const passwordHash = await hashPassword(password);
   await deps.repository.createAuthUser({ userId, email: normalizedEmail, passwordHash });
-  await deps.repository.upsertUserProfile({ userId, currentLevel: 'F1', streakDays: 0, skills: {} });
+  await deps.repository.upsertUserProfile({
+    userId,
+    currentLevel: 'F1',
+    streakDays: 0,
+    skills: {},
+    entitlement: createDefaultEntitlement()
+  });
 
   res.status(201).json({ userId, email: normalizedEmail });
 }

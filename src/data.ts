@@ -1,3 +1,4 @@
+import { createDefaultEntitlement } from './billing.js';
 import type { Lesson, UserProfile } from './types.js';
 
 export const lessons: Lesson[] = [
@@ -28,6 +29,7 @@ export const users: Record<string, UserProfile> = {
     userId: 'demo',
     currentLevel: 'F1',
     streakDays: 0,
+    entitlement: createDefaultEntitlement(),
     skills: {
       'apr-vs-apy': { skillId: 'apr-vs-apy', mastery: 0.2 },
       'basic-budgeting': { skillId: 'basic-budgeting', mastery: 0.2 }

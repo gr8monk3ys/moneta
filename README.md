@@ -43,6 +43,7 @@ This repository includes a TypeScript backend for the core loop with authenticat
 - daily learning feed (`GET /api/learn/today/:userId`)
 - session completion with mastery/streak updates (`POST /api/sessions/complete`)
 - progress summary (`GET /api/progress/:userId`)
+- billing entitlement read/sync (`GET /api/billing/entitlements/:userId`, `POST /api/billing/entitlements/sync`)
 - health/readiness/metrics (`GET /health`, `GET /ready`, `GET /metrics`)
 
 ## Configuration
