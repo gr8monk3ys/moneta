@@ -108,10 +108,11 @@ export function LearnScreen(props: LearnScreenProps) {
         <Text style={styles.subtitle}>No lessons published yet.</Text>
       ) : lessons.map((lesson, index) => {
         const locked = lesson.locked;
+        const completed = lesson.completed;
         return (
-          <View key={lesson.lessonId} style={[styles.node, index === 0 && styles.activeNode, locked && styles.lockedNode]}>
+          <View key={lesson.lessonId} style={[styles.node, index === 0 && styles.activeNode, locked && styles.lockedNode, completed && styles.completedNode]}>
             <Text style={[styles.nodeText, index === 0 && styles.activeNodeText, locked && styles.lockedNodeText]}>
-              {index + 1}. {lesson.title}{locked ? ' (Pro)' : ''}
+              {index + 1}. {completed ? '✓ ' : ''}{lesson.title}{locked ? ' (Pro)' : ''}
             </Text>
             <Text style={styles.nodeMeta}>{lesson.level} • {lesson.track} • {lesson.estimatedMinutes} min</Text>
           </View>
@@ -136,6 +137,7 @@ const styles = StyleSheet.create({
   paywallButtonText: { color: '#1a1d24', textAlign: 'center', fontWeight: '700' },
   node: { backgroundColor: theme.card, borderRadius: 14, padding: 14 },
   activeNode: { borderColor: theme.accent, borderWidth: 1, backgroundColor: '#2d2620' },
+  completedNode: { borderWidth: 1, borderColor: theme.success },
   lockedNode: { opacity: 0.65 },
   nodeText: { color: theme.textPrimary, fontWeight: '600' },
   nodeMeta: { color: theme.textMuted, marginTop: 4, fontSize: 12 },

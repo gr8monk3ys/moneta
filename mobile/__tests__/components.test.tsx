@@ -79,7 +79,8 @@ describe('mobile presentational components', () => {
           track: 'core',
           premium: false,
           estimatedMinutes: 5,
-          locked: false
+          locked: false,
+          completed: false
         },
         {
           lessonId: 'lesson-retirement-income-f4-001',
@@ -89,7 +90,8 @@ describe('mobile presentational components', () => {
           track: 'advanced',
           premium: true,
           estimatedMinutes: 9,
-          locked: true
+          locked: true,
+          completed: true
         }
       ]
     });

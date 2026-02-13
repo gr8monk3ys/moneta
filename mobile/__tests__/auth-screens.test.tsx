@@ -94,7 +94,8 @@ describe('mobile auth-driven screens', () => {
           track: 'core',
           premium: false,
           estimatedMinutes: 5,
-          locked: false
+          locked: false,
+          completed: false
         },
         {
           lessonId: 'lesson-retirement-income-f4-001',
@@ -104,7 +105,8 @@ describe('mobile auth-driven screens', () => {
           track: 'advanced',
           premium: true,
           estimatedMinutes: 9,
-          locked: true
+          locked: true,
+          completed: true
         }
       ]
     });

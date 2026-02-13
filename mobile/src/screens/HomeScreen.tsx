@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { completeSession, fetchProgress, fetchToday, refresh, submitPlacement, type AuthContext } from '../lib/api';
+import { completeSession, fetchLessonDetails, fetchProgress, fetchToday, refresh, submitPlacement, type AuthContext } from '../lib/api';
 import { theme } from '../lib/theme';
 
 interface HomeProps {
@@ -13,6 +13,7 @@ interface DashboardState {
   reviews: string[];
   streak: string;
   nextLesson: string;
+  nextLessonId?: string;
   planBadge: string;
   dueLimitNote: string | null;
 }
@@ -27,6 +28,7 @@ export function HomeScreen(props: HomeProps) {
     reviews: [],
     streak: '—',
     nextLesson: 'Loading lesson…',
+    nextLessonId: undefined,
     planBadge: 'Free',
     dueLimitNote: null
   });
@@ -45,6 +47,7 @@ export function HomeScreen(props: HomeProps) {
         reviews: today.dueReviews.map((item) => item.skillId),
         streak: `${progress.streakDays}`,
         nextLesson: today.nextLesson?.title ?? 'No lesson available',
+        nextLessonId: today.nextLesson?.lessonId,
         planBadge: progress.plan === 'pro' && progress.premiumActive ? 'Pro' : 'Free',
         dueLimitNote: typeof today.features.maxDueReviews === 'number'
           ? `Free plan shows up to ${today.features.maxDueReviews} due reviews/day.`
@@ -84,6 +87,42 @@ export function HomeScreen(props: HomeProps) {
         { skillId: 'basic-budgeting', isCorrect: true }
       ]);
       setStatus(`Session complete • streak ${session.streakDays}`);
+      await loadDashboard();
+    } catch (error) {
+      setStatus(formatError(error));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleCompleteNextLessonDemo() {
+    setLoading(true);
+    setStatus(null);
+
+    try {
+      if (!dashboard.nextLessonId) {
+        setStatus('No lesson available to complete.');
+        return;
+      }
+
+      const lesson = await fetchLessonDetails(dashboard.nextLessonId, props.auth);
+      const targetCoverage = Math.max(1, Math.ceil(lesson.lesson.items.length * 0.75));
+      const simulatedResults = lesson.lesson.items.slice(0, targetCoverage).map((item, index) => ({
+        skillId: item.skillId,
+        isCorrect: index % 5 !== 0
+      }));
+
+      const session = await completeSession(props.auth, simulatedResults, {
+        lessonId: lesson.lesson.lessonId,
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      });
+
+      if (session.lessonProgress?.completed) {
+        setStatus(`Completed lesson: ${lesson.lesson.title}`);
+      } else {
+        setStatus(`Lesson attempt recorded (${lesson.lesson.title}). Keep practicing to complete.`);
+      }
+
       await loadDashboard();
     } catch (error) {
       setStatus(formatError(error));
@@ -141,6 +180,9 @@ export function HomeScreen(props: HomeProps) {
         </Pressable>
         <Pressable style={styles.button} onPress={handlePractice} disabled={loading}>
           <Text style={styles.buttonText}>Submit Practice Session</Text>
+        </Pressable>
+        <Pressable style={styles.button} onPress={handleCompleteNextLessonDemo} disabled={loading}>
+          <Text style={styles.buttonText}>Complete Next Lesson (Demo)</Text>
         </Pressable>
         <Pressable style={styles.secondaryButton} onPress={handleRefresh} disabled={loading}>
           <Text style={styles.secondaryButtonText}>Refresh Session</Text>

@@ -48,6 +48,8 @@ export interface ProgressResponse {
   totalSkills: number;
   plan: SubscriptionPlan;
   premiumActive: boolean;
+  completedLessons?: number;
+  totalLessons?: number;
 }
 
 export interface TodayResponse {
@@ -67,6 +69,28 @@ export interface PathLesson {
   premium: boolean;
   estimatedMinutes: number;
   locked: boolean;
+  completed: boolean;
+}
+
+export interface LessonDetailsResponse {
+  userId: string;
+  lesson: {
+    lessonId: string;
+    title: string;
+    summary: string;
+    level: string;
+    track: 'core' | 'advanced';
+    premium: boolean;
+    estimatedMinutes: number;
+    items: Array<{
+      itemId: string;
+      skillId: string;
+      prompt: string;
+      format?: 'mcq' | 'numeric' | 'scenario';
+      choices?: string[];
+      explanation?: string;
+    }>;
+  };
 }
 
 export interface PathResponse {
@@ -85,6 +109,14 @@ interface SessionResponse {
   userId: string;
   streakDays: number;
   scheduledReviews: Array<{ itemId: string; skillId: string; dueDate: string }>;
+  lessonProgress?: {
+    lessonId: string;
+    completed: boolean;
+    score: number;
+    correctCount: number;
+    totalItems: number;
+    coverage: number;
+  };
 }
 
 interface HealthResponse {
@@ -285,6 +317,10 @@ export async function fetchLearningPath(userId: string, auth: AuthContext): Prom
   return withAuthRetry(auth, (token) => getJson<PathResponse>(`/api/learn/path/${userId}`, token));
 }
 
+export async function fetchLessonDetails(lessonId: string, auth: AuthContext): Promise<LessonDetailsResponse> {
+  return withAuthRetry(auth, (token) => getJson<LessonDetailsResponse>(`/api/learn/lessons/${lessonId}`, token));
+}
+
 export async function fetchEntitlement(userId: string, auth: AuthContext): Promise<EntitlementResponse> {
   return withAuthRetry(auth, (token) => getJson<EntitlementResponse>(`/api/billing/entitlements/${userId}`, token));
 }
@@ -297,6 +333,18 @@ export async function submitPlacement(auth: AuthContext, score: { correctAnswers
   return withAuthRetry(auth, (token) => postJson<PlacementResponse>('/api/onboarding/placement', score, token));
 }
 
-export async function completeSession(auth: AuthContext, itemResults: Array<{ skillId: string; isCorrect: boolean }>): Promise<SessionResponse> {
-  return withAuthRetry(auth, (token) => postJson<SessionResponse>('/api/sessions/complete', { itemResults }, token));
+export async function completeSession(
+  auth: AuthContext,
+  itemResults: Array<{ skillId: string; isCorrect: boolean }>,
+  options: { lessonId?: string; timeZone?: string } = {}
+): Promise<SessionResponse> {
+  return withAuthRetry(auth, (token) => postJson<SessionResponse>(
+    '/api/sessions/complete',
+    {
+      itemResults,
+      lessonId: options.lessonId,
+      timeZone: options.timeZone
+    },
+    token
+  ));
 }
