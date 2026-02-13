@@ -54,13 +54,26 @@ Returns level, streak, and mastery summary. `:userId` must match token subject.
 Returns current subscription entitlement and feature access for the authenticated user. `:userId` must match token subject.
 
 ### `POST /api/billing/entitlements/sync`
-Synchronizes entitlement state from a verified client purchase flow.
+Synchronizes entitlement state after server-side store verification.
 - Body:
   - `platform`: `ios | android | web`
   - `productId`: store product identifier
-  - `purchaseToken`: platform purchase token or receipt reference (validated but not persisted)
-  - `isActive`: whether entitlement should be active
-  - `currentPeriodEndsAt` (optional): ISO timestamp for subscription period end
+  - `purchaseToken`: platform purchase token or receipt reference (validated server-side, never persisted)
+- The server verifies receipts against configured provider APIs and computes `isActive`/`currentPeriodEndsAt` from provider responses.
+
+### `POST /api/billing/webhooks/reconcile`
+Processes signed billing lifecycle events (renewal, cancellation, expiration) and reconciles user entitlements.
+- Required headers:
+  - `x-billing-signature`: HMAC signature (`<timestamp>.<hex-digest>`)
+  - `x-billing-timestamp`: epoch seconds (used in signature and replay window checks)
+- Body:
+  - `eventId`: idempotency key from upstream billing event
+  - `userId`
+  - `platform`: `ios | android | web`
+  - `productId`
+  - `isActive`
+  - `currentPeriodEndsAt` (optional): ISO timestamp
+- Duplicate `eventId` values are ignored safely.
 
 ## Security and lifecycle controls
 

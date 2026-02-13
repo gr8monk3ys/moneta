@@ -1,11 +1,12 @@
 import { normalizeEntitlement } from './billing.js';
 import { users } from './data.js';
 import type { ConsumeRefreshTokenInput, UserRepository } from './repository.js';
-import type { AuthUser, RefreshTokenRecord, UserProfile } from './types.js';
+import type { AuthUser, BillingWebhookEventRecord, RefreshTokenRecord, UserProfile } from './types.js';
 
 export class InMemoryUserRepository implements UserRepository {
   private readonly authUsers: Map<string, AuthUser> = new Map();
   private readonly refreshTokens: Map<string, RefreshTokenRecord> = new Map();
+  private readonly billingWebhookEvents: Map<string, BillingWebhookEventRecord> = new Map();
 
   public async createAuthUser(user: AuthUser): Promise<AuthUser> {
     this.authUsers.set(user.email.toLowerCase(), user);
@@ -105,6 +106,14 @@ export class InMemoryUserRepository implements UserRepository {
         revokedAt: new Date().toISOString()
       });
     }
+  }
+
+  public async hasProcessedBillingWebhookEvent(eventId: string): Promise<boolean> {
+    return this.billingWebhookEvents.has(eventId);
+  }
+
+  public async markBillingWebhookEventProcessed(record: BillingWebhookEventRecord): Promise<void> {
+    this.billingWebhookEvents.set(record.eventId, record);
   }
 
   public async pruneExpiredRefreshTokens(nowIso: string): Promise<number> {

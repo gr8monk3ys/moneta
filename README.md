@@ -62,11 +62,17 @@ Backend:
 - `METRICS_TOKEN` (required in production, minimum 24 chars, to access `GET /metrics` with `Authorization: Bearer <token>`)
 - `RATE_LIMIT_REDIS_URL` (optional Redis store for distributed rate limiting; recommended in production)
 - `TRUST_PROXY` (`true`/`false`; defaults to `true` in production)
+- `BILLING_WEBHOOK_SECRET` (required in production; HMAC secret for billing reconciliation webhooks)
+- `APPLE_SHARED_SECRET` (required if iOS subscriptions are supported)
+- `GOOGLE_PLAY_PACKAGE_NAME` and `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` (required together if Android subscriptions are supported)
+- `BILLING_ALLOW_SANDBOX_PURCHASES` (`false` in production; defaults to enabled only outside production)
+- `BILLING_PROVIDER_TIMEOUT_MS` (optional, defaults to `8000`)
 
 Production readiness helper:
 
 - Run `./scripts/production-readiness-check.sh` in your deployment environment to verify required env vars and secure defaults before promoting traffic.
-- Run `./scripts/final-verification-gate.sh` before release sign-off to validate backend/mobile lint, tests, build, and high/critical security audit gates.
+- Run `./scripts/final-verification-gate.sh` before release sign-off to validate backend/mobile lint, tests, build, integration tests, and high/critical security audit gates.
+- If you intentionally need to skip integration tests locally, set `REQUIRE_INTEGRATION_TESTS=false` explicitly.
 
 Mobile:
 

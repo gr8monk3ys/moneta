@@ -56,6 +56,17 @@ describe('InMemoryUserRepository', () => {
     });
     expect(consumedAgain).toBeNull();
 
+    expect(await repo.hasProcessedBillingWebhookEvent('evt_1')).toBe(false);
+    await repo.markBillingWebhookEventProcessed({
+      eventId: 'evt_1',
+      userId: 'u1',
+      platform: 'ios',
+      productId: 'moneta.pro.monthly',
+      payloadHash: 'hash',
+      processedAt: nowIso
+    });
+    expect(await repo.hasProcessedBillingWebhookEvent('evt_1')).toBe(true);
+
     await repo.revokeRefreshToken('t1');
     expect((await repo.getRefreshToken('t1'))?.revokedAt).toBeTruthy();
 

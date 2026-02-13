@@ -1,6 +1,7 @@
 import request from 'supertest';
 import { describe, expect, it } from 'vitest';
 import { createDefaultEntitlement } from '../src/billing.js';
+import { createBillingVerifier, createWebhookSignature } from '../src/billing.verification.js';
 import { createApp } from '../src/app.js';
 import { InMemoryUserRepository } from '../src/repository.memory.js';
 
@@ -10,8 +11,14 @@ async function sleep(ms: number): Promise<void> {
 
 function buildApp(accessTtlSeconds = 3600, refreshTtlSeconds = 604800) {
   const repository = new InMemoryUserRepository();
+  const billingVerifier = createBillingVerifier({
+    nodeEnv: 'development',
+    allowSandboxTokens: true,
+    webhookSecret: 'test-billing-webhook-secret'
+  });
   const app = createApp({
     repository,
+    billingVerifier,
     jwtSecret: 'test-secret',
     jwtRefreshSecret: 'test-refresh-secret',
     jwtAccessTtlSeconds: accessTtlSeconds,
@@ -305,6 +312,21 @@ describe('Moneta API auth + learning flow', () => {
     expect(upgraded.body.features.maxDueReviews).toBeNull();
   });
 
+  it('rejects purchase tokens that cannot be server-side verified', async () => {
+    const { app, accessToken } = await buildAuthedApp();
+
+    const response = await request(app)
+      .post('/api/billing/entitlements/sync')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        platform: 'ios',
+        productId: 'moneta.pro.monthly',
+        purchaseToken: 'not-a-verified-token'
+      });
+
+    expect(response.status).toBe(400);
+  });
+
   it('limits due reviews for free users and unlocks full queue for pro users', async () => {
     const { app, repository } = buildApp();
 
@@ -363,6 +385,79 @@ describe('Moneta API auth + learning flow', () => {
     expect(proToday.body.dueReviews).toHaveLength(5);
     expect(proToday.body.features.unlimitedReviews).toBe(true);
     expect(proToday.body.features.maxDueReviews).toBeNull();
+  });
+
+  it('reconciles billing webhooks with signature validation and idempotency', async () => {
+    const { app } = buildApp();
+
+    await request(app).post('/api/auth/register').send({
+      userId: 'webhook-user',
+      email: 'webhook-user@example.com',
+      password: 'password123'
+    });
+
+    const eventPayload = {
+      eventId: 'evt_billing_001',
+      userId: 'webhook-user',
+      platform: 'ios',
+      productId: 'moneta.pro.monthly',
+      isActive: true,
+      currentPeriodEndsAt: new Date(Date.now() + 5 * 86_400_000).toISOString()
+    };
+    const payloadJson = JSON.stringify(eventPayload);
+    const timestamp = String(Math.floor(Date.now() / 1000));
+    const signature = createWebhookSignature(
+      'test-billing-webhook-secret',
+      Buffer.from(payloadJson),
+      timestamp
+    );
+
+    const first = await request(app)
+      .post('/api/billing/webhooks/reconcile')
+      .set('Content-Type', 'application/json')
+      .set('x-billing-signature', signature)
+      .set('x-billing-timestamp', timestamp)
+      .send(payloadJson);
+
+    expect(first.status).toBe(200);
+    expect(first.body.processed).toBe(true);
+    expect(first.body.entitlement.plan).toBe('pro');
+
+    const duplicate = await request(app)
+      .post('/api/billing/webhooks/reconcile')
+      .set('Content-Type', 'application/json')
+      .set('x-billing-signature', signature)
+      .set('x-billing-timestamp', timestamp)
+      .send(payloadJson);
+
+    expect(duplicate.status).toBe(200);
+    expect(duplicate.body.duplicate).toBe(true);
+    expect(duplicate.body.processed).toBe(false);
+  });
+
+  it('rejects billing webhooks with invalid signatures', async () => {
+    const { app } = buildApp();
+
+    await request(app).post('/api/auth/register').send({
+      userId: 'bad-sig-user',
+      email: 'bad-sig@example.com',
+      password: 'password123'
+    });
+
+    const response = await request(app)
+      .post('/api/billing/webhooks/reconcile')
+      .set('Content-Type', 'application/json')
+      .set('x-billing-signature', '123.bad-signature')
+      .set('x-billing-timestamp', '123')
+      .send(JSON.stringify({
+        eventId: 'evt_bad_sig',
+        userId: 'bad-sig-user',
+        platform: 'ios',
+        productId: 'moneta.pro.monthly',
+        isActive: true
+      }));
+
+    expect(response.status).toBe(401);
   });
 
   it('requires metrics token when configured and exposes health/readiness', async () => {

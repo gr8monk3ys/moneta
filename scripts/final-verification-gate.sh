@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-REQUIRE_INTEGRATION_TESTS="${REQUIRE_INTEGRATION_TESTS:-false}"
+REQUIRE_INTEGRATION_TESTS="${REQUIRE_INTEGRATION_TESTS:-true}"
 
 run_step() {
   local label="$1"

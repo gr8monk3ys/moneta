@@ -99,6 +99,9 @@ describe('PostgresUserRepository', () => {
         rowCount: 1
       })
       .mockResolvedValueOnce({ rowCount: 3 })
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 })
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({ rows: [{ event_id: 'evt_1' }], rowCount: 1 })
       .mockResolvedValueOnce({})
       .mockRejectedValueOnce(new Error('db down'));
 
@@ -123,6 +126,16 @@ describe('PostgresUserRepository', () => {
     })).toMatchObject({ tokenId: 't1', revokedAt: '2026-01-01T00:00:10.000Z' });
 
     expect(await repo.pruneExpiredRefreshTokens('2026-02-01')).toBe(3);
+    expect(await repo.hasProcessedBillingWebhookEvent('evt_1')).toBe(false);
+    await repo.markBillingWebhookEventProcessed({
+      eventId: 'evt_1',
+      userId: 'u1',
+      platform: 'android',
+      productId: 'moneta.pro.yearly',
+      payloadHash: 'hash',
+      processedAt: '2026-02-01T00:00:00.000Z'
+    });
+    expect(await repo.hasProcessedBillingWebhookEvent('evt_1')).toBe(true);
     expect(await repo.checkReadiness()).toBe(true);
     expect(await repo.checkReadiness()).toBe(false);
   });

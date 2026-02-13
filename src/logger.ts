@@ -3,6 +3,7 @@ import type { NextFunction, Request, Response } from 'express';
 
 export interface RequestLoggerRequest extends Request {
   requestId?: string;
+  rawBody?: Buffer;
 }
 
 interface LogContext {

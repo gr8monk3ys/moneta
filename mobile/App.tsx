@@ -1,5 +1,6 @@
 import { StatusBar } from 'expo-status-bar';
-import { ActivityIndicator, SafeAreaView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { useState } from 'react';
 import { BottomNav, type TabKey } from './src/components/BottomNav';
 import { useAuthState } from './src/hooks/useAuth';
@@ -38,37 +39,43 @@ export default function App() {
 
   if (auth.bootstrapping) {
     return (
-      <SafeAreaView style={styles.root}>
-        <StatusBar style="light" />
-        <View style={styles.bootstrappingContainer}>
-          <ActivityIndicator testID="loading-indicator" color={theme.accent} />
-        </View>
-      </SafeAreaView>
+      <SafeAreaProvider>
+        <SafeAreaView style={styles.root}>
+          <StatusBar style="light" />
+          <View style={styles.bootstrappingContainer}>
+            <ActivityIndicator testID="loading-indicator" color={theme.accent} />
+          </View>
+        </SafeAreaView>
+      </SafeAreaProvider>
     );
   }
 
   if (!auth.auth) {
     return (
-      <SafeAreaView style={styles.root}>
-        <StatusBar style="light" />
-        <LoginScreen onAuthenticated={auth.login} />
-      </SafeAreaView>
+      <SafeAreaProvider>
+        <SafeAreaView style={styles.root}>
+          <StatusBar style="light" />
+          <LoginScreen onAuthenticated={auth.login} />
+        </SafeAreaView>
+      </SafeAreaProvider>
     );
   }
 
   return (
-    <SafeAreaView style={styles.root}>
-      <StatusBar style="light" />
-      <MainTabs
-        userId={auth.auth.userId}
-        authContext={{
-          accessToken: auth.auth.accessToken,
-          refreshToken: auth.auth.refreshToken,
-          onTokensUpdated: auth.updateTokens
-        }}
-        onLogout={auth.logout}
-      />
-    </SafeAreaView>
+    <SafeAreaProvider>
+      <SafeAreaView style={styles.root}>
+        <StatusBar style="light" />
+        <MainTabs
+          userId={auth.auth.userId}
+          authContext={{
+            accessToken: auth.auth.accessToken,
+            refreshToken: auth.auth.refreshToken,
+            onTokensUpdated: auth.updateTokens
+          }}
+          onLogout={auth.logout}
+        />
+      </SafeAreaView>
+    </SafeAreaProvider>
   );
 }
 

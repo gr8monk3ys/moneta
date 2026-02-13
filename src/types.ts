@@ -1,6 +1,7 @@
 export type FinanceLevel = 'F1' | 'F2' | 'F3' | 'F4' | 'F5' | 'F6';
 export type SubscriptionPlan = 'free' | 'pro';
 export type EntitlementSource = 'none' | 'ios' | 'android' | 'web' | 'admin';
+export type BillingPlatform = 'ios' | 'android' | 'web';
 
 export interface SubscriptionEntitlement {
   plan: SubscriptionPlan;
@@ -41,6 +42,15 @@ export interface RefreshTokenRecord {
   createdAt: string;
   expiresAt: string;
   revokedAt?: string;
+}
+
+export interface BillingWebhookEventRecord {
+  eventId: string;
+  userId: string;
+  platform: BillingPlatform;
+  productId: string;
+  payloadHash: string;
+  processedAt: string;
 }
 
 export interface LessonItem {

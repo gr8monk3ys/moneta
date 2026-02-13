@@ -8,6 +8,7 @@ required_vars=(
   JWT_REFRESH_SECRET
   METRICS_TOKEN
   CORS_ORIGINS
+  BILLING_WEBHOOK_SECRET
 )
 
 is_weak_secret() {
@@ -75,6 +76,40 @@ fi
 
 if [[ "$CORS_ORIGINS" == *"*"* ]]; then
   echo "CORS_ORIGINS must be an explicit allowlist in production." >&2
+  exit 1
+fi
+
+has_apple_config=false
+has_google_config=false
+
+if [[ -n "${APPLE_SHARED_SECRET:-}" ]]; then
+  has_apple_config=true
+  if is_weak_secret "$APPLE_SHARED_SECRET" 16; then
+    echo "APPLE_SHARED_SECRET must be at least 16 characters and not use placeholder/default values." >&2
+    exit 1
+  fi
+fi
+
+if [[ -n "${GOOGLE_PLAY_SERVICE_ACCOUNT_JSON:-}" || -n "${GOOGLE_PLAY_PACKAGE_NAME:-}" ]]; then
+  if [[ -z "${GOOGLE_PLAY_SERVICE_ACCOUNT_JSON:-}" || -z "${GOOGLE_PLAY_PACKAGE_NAME:-}" ]]; then
+    echo "GOOGLE_PLAY_SERVICE_ACCOUNT_JSON and GOOGLE_PLAY_PACKAGE_NAME must be provided together." >&2
+    exit 1
+  fi
+
+  has_google_config=true
+  if [[ "$GOOGLE_PLAY_SERVICE_ACCOUNT_JSON" != *"client_email"* || "$GOOGLE_PLAY_SERVICE_ACCOUNT_JSON" != *"private_key"* ]]; then
+    echo "GOOGLE_PLAY_SERVICE_ACCOUNT_JSON must include client_email and private_key." >&2
+    exit 1
+  fi
+fi
+
+if [[ "$has_apple_config" != "true" && "$has_google_config" != "true" ]]; then
+  echo "At least one billing provider must be configured in production (Apple or Google Play)." >&2
+  exit 1
+fi
+
+if [[ "${BILLING_ALLOW_SANDBOX_PURCHASES:-false}" == "true" ]]; then
+  echo "BILLING_ALLOW_SANDBOX_PURCHASES must be disabled in production." >&2
   exit 1
 fi
 

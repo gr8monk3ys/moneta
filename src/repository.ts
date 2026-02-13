@@ -1,4 +1,4 @@
-import type { AuthUser, RefreshTokenRecord, UserProfile } from './types.js';
+import type { AuthUser, BillingWebhookEventRecord, RefreshTokenRecord, UserProfile } from './types.js';
 
 export interface ConsumeRefreshTokenInput {
   tokenId: string;
@@ -19,6 +19,8 @@ export interface UserRepository {
   revokeRefreshToken(tokenId: string): Promise<void>;
   revokeRefreshTokensByUser(userId: string): Promise<void>;
   revokeRefreshTokensBySession(userId: string, sessionId: string): Promise<void>;
+  hasProcessedBillingWebhookEvent(eventId: string): Promise<boolean>;
+  markBillingWebhookEventProcessed(record: BillingWebhookEventRecord): Promise<void>;
   pruneExpiredRefreshTokens(nowIso: string): Promise<number>;
   checkReadiness(): Promise<boolean>;
 }

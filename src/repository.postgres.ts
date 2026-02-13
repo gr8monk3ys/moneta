@@ -1,7 +1,14 @@
 import { Pool } from 'pg';
 import { normalizeEntitlement } from './billing.js';
 import type { ConsumeRefreshTokenInput, UserRepository } from './repository.js';
-import type { AuthUser, RefreshTokenRecord, SkillState, SubscriptionEntitlement, UserProfile } from './types.js';
+import type {
+  AuthUser,
+  BillingWebhookEventRecord,
+  RefreshTokenRecord,
+  SkillState,
+  SubscriptionEntitlement,
+  UserProfile
+} from './types.js';
 
 function serializeSkills(skills: Record<string, SkillState>): string {
   return JSON.stringify(skills);
@@ -203,6 +210,33 @@ export class PostgresUserRepository implements UserRepository {
       WHERE user_id = $1 AND session_id = $2 AND revoked_at IS NULL
       `,
       [userId, sessionId]
+    );
+  }
+
+  public async hasProcessedBillingWebhookEvent(eventId: string): Promise<boolean> {
+    const result = await this.pool.query(
+      'SELECT event_id FROM billing_webhook_events WHERE event_id = $1 LIMIT 1',
+      [eventId]
+    );
+
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  public async markBillingWebhookEventProcessed(record: BillingWebhookEventRecord): Promise<void> {
+    await this.pool.query(
+      `
+      INSERT INTO billing_webhook_events (event_id, user_id, platform, product_id, payload_hash, processed_at)
+      VALUES ($1, $2, $3, $4, $5, $6)
+      ON CONFLICT (event_id) DO NOTHING
+      `,
+      [
+        record.eventId,
+        record.userId,
+        record.platform,
+        record.productId,
+        record.payloadHash,
+        record.processedAt
+      ]
     );
   }
 

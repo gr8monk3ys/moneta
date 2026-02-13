@@ -13,6 +13,10 @@ This checklist is organized by release criticality so the team can ship in contr
   - `METRICS_TOKEN` is at least 24 characters.
   - No placeholder/default-style values are used.
 - [ ] Ensure no secrets are logged (request bodies, auth headers, tokens).
+- [ ] Configure billing secrets and provider credentials:
+  - `BILLING_WEBHOOK_SECRET`
+  - `APPLE_SHARED_SECRET` (if iOS subscriptions are enabled)
+  - `GOOGLE_PLAY_PACKAGE_NAME` + `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` (if Android subscriptions are enabled)
 
 ### Runtime configuration
 - [ ] Set all required production environment variables:
@@ -23,6 +27,7 @@ This checklist is organized by release criticality so the team can ship in contr
   - `METRICS_TOKEN`
 - [ ] Configure `CORS_ORIGINS` to explicit production domains only.
 - [ ] Set `TRUST_PROXY=true` when running behind a load balancer or reverse proxy.
+- [ ] Ensure `BILLING_ALLOW_SANDBOX_PURCHASES=false` in production.
 
 ### Data and database safety
 - [ ] Confirm all migrations apply cleanly on a production-like database snapshot.
@@ -41,6 +46,7 @@ This checklist is organized by release criticality so the team can ship in contr
 
 ### CI/CD gates
 - [ ] Require passing `lint`, `test`, and `build` jobs before merge/deploy.
+- [ ] Require passing integration tests for release gate (`REQUIRE_INTEGRATION_TESTS=true`).
 - [ ] Add required branch protection and prevent direct pushes to release branch.
 - [ ] Ensure deploy pipeline includes post-deploy health verification and rollback trigger.
 - [ ] Verify deploy concurrency guard is enabled (single production deployment at a time).

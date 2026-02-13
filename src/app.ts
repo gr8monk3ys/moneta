@@ -2,8 +2,9 @@ import cors from 'cors';
 import express from 'express';
 import rateLimit, { type Store } from 'express-rate-limit';
 import helmet from 'helmet';
+import { createBillingVerifier, type BillingVerifier } from './billing.verification.js';
 import { ApiError } from './errors.js';
-import { requestLogger } from './logger.js';
+import { requestLogger, type RequestLoggerRequest } from './logger.js';
 import { metricsMiddleware } from './metrics.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import type { UserRepository } from './repository.js';
@@ -15,6 +16,7 @@ import type { RouteDeps } from './routes/types.js';
 
 interface AppOptions {
   repository: UserRepository;
+  billingVerifier?: BillingVerifier;
   jwtSecret: string;
   jwtRefreshSecret: string;
   jwtAccessTtlSeconds: number;
@@ -46,6 +48,11 @@ export function createApp(options: AppOptions): express.Express {
   const app = express();
   const deps: RouteDeps = {
     repository: options.repository,
+    billingVerifier: options.billingVerifier ?? createBillingVerifier({
+      nodeEnv: 'development',
+      allowSandboxTokens: true,
+      webhookSecret: 'dev-billing-webhook-secret'
+    }),
     jwtSecret: options.jwtSecret,
     jwtRefreshSecret: options.jwtRefreshSecret,
     jwtAccessTtlSeconds: options.jwtAccessTtlSeconds,
@@ -75,7 +82,12 @@ export function createApp(options: AppOptions): express.Express {
   app.use(requestLogger());
   app.use(metricsMiddleware());
   app.use(cors(parseAllowedOrigins(options.allowedOrigins)));
-  app.use(express.json({ limit: '100kb' }));
+  app.use(express.json({
+    limit: '100kb',
+    verify: (req: RequestLoggerRequest, _res, buffer) => {
+      req.rawBody = Buffer.from(buffer);
+    }
+  }));
   app.use('/api', apiLimiter);
 
   registerSystemRoutes(app, deps);

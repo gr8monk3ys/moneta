@@ -1,7 +1,9 @@
+import type { BillingVerifier } from '../billing.verification.js';
 import type { UserRepository } from '../repository.js';
 
 export interface RouteDeps {
   repository: UserRepository;
+  billingVerifier: BillingVerifier;
   jwtSecret: string;
   jwtRefreshSecret: string;
   jwtAccessTtlSeconds: number;

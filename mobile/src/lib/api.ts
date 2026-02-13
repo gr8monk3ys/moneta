@@ -83,7 +83,7 @@ interface SyncEntitlementPayload {
   platform: 'ios' | 'android' | 'web';
   productId: string;
   purchaseToken: string;
-  isActive: boolean;
+  isActive?: boolean;
   currentPeriodEndsAt?: string;
 }
 

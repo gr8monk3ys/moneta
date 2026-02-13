@@ -28,6 +28,7 @@ describe.skipIf(!runIntegration)('Postgres integration', () => {
   });
 
   afterAll(async () => {
+    await pool.query('DELETE FROM billing_webhook_events');
     await pool.query('DELETE FROM refresh_tokens');
     await pool.query('DELETE FROM user_profiles');
     await pool.query('DELETE FROM auth_users');

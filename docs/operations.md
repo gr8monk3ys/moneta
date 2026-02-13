@@ -41,5 +41,14 @@
 
 ## Final release verification gate
 - Run `./scripts/final-verification-gate.sh` before release go/no-go.
-- Optional strict mode: set `REQUIRE_INTEGRATION_TESTS=true` to fail if `DATABASE_URL` is missing.
-- The gate validates backend/mobile lint, tests, backend build, and security audits at high/critical thresholds.
+- Integration tests are required by default; set `REQUIRE_INTEGRATION_TESTS=false` only for explicit local-only runs.
+- The gate validates backend/mobile lint, unit tests, integration tests, backend build, and security audits at high/critical thresholds.
+
+## Billing verification and reconciliation
+- `POST /api/billing/entitlements/sync` verifies purchase tokens server-side against configured store providers before entitlement changes.
+- `POST /api/billing/webhooks/reconcile` accepts signed HMAC webhook events and applies idempotent entitlement reconciliation.
+- Configure billing environment variables for production:
+  - `BILLING_WEBHOOK_SECRET`
+  - `APPLE_SHARED_SECRET` for iOS verification
+  - `GOOGLE_PLAY_PACKAGE_NAME` + `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` for Android verification
+  - `BILLING_ALLOW_SANDBOX_PURCHASES=false`
