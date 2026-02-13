@@ -198,8 +198,7 @@ describe('mobile api auth retry', () => {
     const upgraded = await syncEntitlement(auth, {
       platform: 'ios',
       productId: 'moneta.pro.monthly',
-      purchaseToken: 'sandbox-purchase-token-12345',
-      isActive: true
+      purchaseToken: 'sandbox-purchase-token-12345'
     });
     expect(upgraded.entitlement.plan).toBe('pro');
 

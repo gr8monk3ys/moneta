@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { fetchToday, syncEntitlement, type AuthContext } from '../lib/api';
+import { disconnectStoreBilling, listSubscriptionProducts, purchasePrimarySubscription } from '../lib/storeBilling';
 import { theme } from '../lib/theme';
 
 interface LearnScreenProps {
@@ -18,6 +19,7 @@ export function LearnScreen(props: LearnScreenProps) {
   const [nextLesson, setNextLesson] = useState<string | null>(null);
   const [advancedTracksUnlocked, setAdvancedTracksUnlocked] = useState(false);
   const [planLabel, setPlanLabel] = useState('Free');
+  const [priceLabel, setPriceLabel] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
@@ -38,23 +40,37 @@ export function LearnScreen(props: LearnScreenProps) {
     }
   }, [props.auth, props.userId]);
 
+  const loadCatalog = useCallback(async () => {
+    try {
+      const products = await listSubscriptionProducts();
+      setPriceLabel(products[0]?.displayPrice ?? null);
+    } catch (reason) {
+      setError(formatError(reason));
+    }
+  }, []);
+
   useEffect(() => {
     loadToday().catch(() => undefined);
-  }, [loadToday]);
+    loadCatalog().catch(() => undefined);
+
+    return () => {
+      disconnectStoreBilling().catch(() => undefined);
+    };
+  }, [loadCatalog, loadToday]);
 
   async function upgradeToPro() {
     setStatus(null);
+    setError(null);
     setLoading(true);
 
     try {
+      const purchase = await purchasePrimarySubscription(props.userId);
       await syncEntitlement(props.auth, {
-        platform: 'ios',
-        productId: 'moneta.pro.monthly',
-        purchaseToken: `sandbox-${Date.now()}`,
-        isActive: true,
-        currentPeriodEndsAt: new Date(Date.now() + 30 * 86_400_000).toISOString()
+        platform: purchase.platform,
+        productId: purchase.productId,
+        purchaseToken: purchase.purchaseToken
       });
-      setStatus('Moneta Pro unlocked');
+      setStatus(purchase.sandbox ? 'Moneta Pro unlocked in sandbox mode.' : 'Moneta Pro unlocked.');
       await loadToday();
     } catch (reason) {
       setError(formatError(reason));
@@ -75,7 +91,10 @@ export function LearnScreen(props: LearnScreenProps) {
       {!advancedTracksUnlocked ? (
         <View style={styles.paywall}>
           <Text style={styles.paywallTitle}>Unlock Pro to access advanced tracks</Text>
-          <Text style={styles.paywallBody}>Includes investing, retirement, and certificates.</Text>
+          <Text style={styles.paywallBody}>
+            Includes investing, retirement, and certificates.
+            {priceLabel ? ` Current plan: ${priceLabel}.` : ''}
+          </Text>
           <Pressable style={styles.paywallButton} onPress={upgradeToPro} disabled={loading}>
             <Text style={styles.paywallButtonText}>Upgrade to Pro</Text>
           </Pressable>

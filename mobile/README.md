@@ -28,6 +28,19 @@ Set `EXPO_PUBLIC_API_BASE_URL` to your backend URL.
 - Local simulator (same machine): `http://localhost:3000`
 - Physical iPhone device: use your machine LAN IP, for example `http://192.168.1.15:3000`
 
+## Store billing configuration
+
+Configure subscription SKUs per platform:
+
+- `EXPO_PUBLIC_IOS_SUBSCRIPTION_PRODUCT_IDS` (comma-separated, for example `moneta.pro.monthly,moneta.pro.yearly`)
+- `EXPO_PUBLIC_ANDROID_SUBSCRIPTION_PRODUCT_IDS` (comma-separated)
+
+Optional local fallback:
+
+- `EXPO_PUBLIC_BILLING_SANDBOX_MODE=true|false`
+  - defaults to `true` outside production
+  - defaults to `false` in production
+
 ## Tests and lint
 
 ```bash
