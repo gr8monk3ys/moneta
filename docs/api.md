@@ -56,20 +56,25 @@ Returns reviews that are currently due (based on persisted per-skill schedule) a
 ### `GET /api/learn/path/:userId`
 Returns curriculum path metadata for the authenticated user.
 - Includes each lesson with `locked` flag based on entitlement (free vs pro).
+- Includes `completed` flag for lesson-level progression tracking.
 
 ### `GET /api/learn/lessons/:lessonId`
 Returns lesson details for the authenticated user.
 - Premium lessons return `402` when the user does not have Pro access.
 - Lesson items exclude answer keys (`correctAnswer`) in API responses.
+- Lesson items include delivery metadata (`format`, `choices`, `explanation`) for richer rendering.
 
 ### `POST /api/sessions/complete`
 Stores item outcomes, updates streak, and schedules review items.
 - Optional body field: `timeZone` (IANA timezone like `America/New_York`) to compute streak day boundaries.
+- Optional body field: `lessonId` to evaluate and persist lesson completion against ordered curriculum progression.
 - Optional header fallback: `x-user-timezone` if `timeZone` is omitted.
+- Response may include `lessonProgress` with completion score/coverage metadata when `lessonId` is provided.
 
 ### `GET /api/progress/:userId`
 Returns level, streak, and mastery summary. `:userId` must match token subject.
 - Includes `plan` and `premiumActive` status.
+- Includes lesson progression summary (`completedLessons`, `totalLessons`).
 
 ### `GET /api/billing/entitlements/:userId`
 Returns current subscription entitlement and feature access for the authenticated user. `:userId` must match token subject.

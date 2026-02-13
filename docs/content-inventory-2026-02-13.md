@@ -28,4 +28,5 @@ npx tsx -e "import { listCurriculum } from './src/data.ts'; const all=listCurric
 ## Notes
 
 - This pass satisfies the PRD MVP volume target range (`60-100` lessons and `400-700` items).
-- Curriculum quality and pedagogy depth should continue improving with SME/editorial review and richer item formats.
+- Lessons include editorial review metadata and item-level format/explanation fields.
+- Lesson progression now supports completion tracking via API (`completed` flags in curriculum path and `lessonProgress` in session completion responses).
