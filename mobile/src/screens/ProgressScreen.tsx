@@ -13,6 +13,7 @@ interface ProgressViewModel {
   skills: string;
   mastery: string;
   streak: string;
+  plan: string;
 }
 
 function formatError(error: unknown): string {
@@ -32,7 +33,8 @@ export function ProgressScreen(props: ProgressScreenProps) {
           level: progress.currentLevel,
           skills: `${progress.masteredSkills}/${progress.totalSkills}`,
           mastery: `${masteryValue}%`,
-          streak: `${progress.streakDays}`
+          streak: `${progress.streakDays}`,
+          plan: progress.plan === 'pro' && progress.premiumActive ? 'Pro' : 'Free'
         });
       })
       .catch((reason) => {
@@ -63,6 +65,7 @@ export function ProgressScreen(props: ProgressScreenProps) {
     <View style={styles.container}>
       <View style={styles.ringCard}>
         <Text style={styles.level}>{viewModel.level}</Text>
+        <Text style={styles.plan}>Plan: {viewModel.plan}</Text>
         <Text style={styles.subtitle}>Everyday Decision-Making</Text>
       </View>
       <View style={styles.statsRow}>
@@ -80,6 +83,7 @@ const styles = StyleSheet.create({
   error: { color: theme.danger, textAlign: 'center' },
   ringCard: { backgroundColor: theme.cardElevated, borderRadius: 18, padding: 24, alignItems: 'center' },
   level: { color: theme.accent, fontSize: 40, fontWeight: '800' },
+  plan: { color: theme.textPrimary, fontWeight: '700', marginTop: 4 },
   subtitle: { color: theme.textMuted, marginTop: 6 },
   statsRow: { flexDirection: 'row', gap: 10 },
   stat: { flex: 1, backgroundColor: theme.card, borderRadius: 14, padding: 14, alignItems: 'center' },

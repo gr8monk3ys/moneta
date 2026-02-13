@@ -14,7 +14,9 @@
     "test": "vitest run --exclude dist tests",
     "test:integration": "vitest run --exclude dist tests/postgres.integration.test.ts",
     "test:all": "npm test && npm run test:integration",
-    "test:coverage": "vitest run --coverage --exclude dist tests"
+    "test:coverage": "vitest run --coverage --exclude dist tests",
+    "check:billing-release": "./scripts/billing-release-readiness-check.sh",
+    "release:evidence": "./scripts/collect-release-evidence.sh"
   },
   "keywords": [],
   "author": "",
@@ -32,6 +34,9 @@
     "rate-limit-redis": "^4.3.1",
     "redis": "^5.10.0",
     "zod": "^4.3.6"
+  },
+  "overrides": {
+    "qs": "6.14.2"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",

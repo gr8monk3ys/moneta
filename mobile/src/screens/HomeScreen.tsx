@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { completeSession, fetchProgress, fetchToday, refresh, submitPlacement, type AuthContext } from '../lib/api';
+import { completeSession, fetchLessonDetails, fetchProgress, fetchToday, refresh, submitPlacement, type AuthContext } from '../lib/api';
 import { theme } from '../lib/theme';
 
 interface HomeProps {
@@ -13,6 +13,9 @@ interface DashboardState {
   reviews: string[];
   streak: string;
   nextLesson: string;
+  nextLessonId?: string;
+  planBadge: string;
+  dueLimitNote: string | null;
 }
 
 function formatError(error: unknown): string {
@@ -24,7 +27,10 @@ export function HomeScreen(props: HomeProps) {
     progress: 'Loading progress…',
     reviews: [],
     streak: '—',
-    nextLesson: 'Loading lesson…'
+    nextLesson: 'Loading lesson…',
+    nextLessonId: undefined,
+    planBadge: 'Free',
+    dueLimitNote: null
   });
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
@@ -40,7 +46,12 @@ export function HomeScreen(props: HomeProps) {
         progress: `Level ${progress.currentLevel} • ${progress.masteredSkills}/${progress.totalSkills} mastered`,
         reviews: today.dueReviews.map((item) => item.skillId),
         streak: `${progress.streakDays}`,
-        nextLesson: today.nextLesson?.title ?? 'No lesson available'
+        nextLesson: today.nextLesson?.title ?? 'No lesson available',
+        nextLessonId: today.nextLesson?.lessonId,
+        planBadge: progress.plan === 'pro' && progress.premiumActive ? 'Pro' : 'Free',
+        dueLimitNote: typeof today.features.maxDueReviews === 'number'
+          ? `Free plan shows up to ${today.features.maxDueReviews} due reviews/day.`
+          : null
       });
     } catch (error) {
       setStatus(formatError(error));
@@ -84,6 +95,42 @@ export function HomeScreen(props: HomeProps) {
     }
   }
 
+  async function handleCompleteNextLessonDemo() {
+    setLoading(true);
+    setStatus(null);
+
+    try {
+      if (!dashboard.nextLessonId) {
+        setStatus('No lesson available to complete.');
+        return;
+      }
+
+      const lesson = await fetchLessonDetails(dashboard.nextLessonId, props.auth);
+      const targetCoverage = Math.max(1, Math.ceil(lesson.lesson.items.length * 0.75));
+      const simulatedResults = lesson.lesson.items.slice(0, targetCoverage).map((item, index) => ({
+        skillId: item.skillId,
+        isCorrect: index % 5 !== 0
+      }));
+
+      const session = await completeSession(props.auth, simulatedResults, {
+        lessonId: lesson.lesson.lessonId,
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      });
+
+      if (session.lessonProgress?.completed) {
+        setStatus(`Completed lesson: ${lesson.lesson.title}`);
+      } else {
+        setStatus(`Lesson attempt recorded (${lesson.lesson.title}). Keep practicing to complete.`);
+      }
+
+      await loadDashboard();
+    } catch (error) {
+      setStatus(formatError(error));
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function handleRefresh() {
     setLoading(true);
     setStatus(null);
@@ -107,6 +154,7 @@ export function HomeScreen(props: HomeProps) {
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.hero}>
         <Text style={styles.heroTitle}>Daily Goal: 10 min</Text>
+        <Text style={styles.planBadge}>Plan: {dashboard.planBadge}</Text>
         <Text style={styles.heroSubtitle}>{dashboard.progress}</Text>
         <Text style={styles.heroSubtitle}>Next: {dashboard.nextLesson}</Text>
       </View>
@@ -118,6 +166,7 @@ export function HomeScreen(props: HomeProps) {
         ) : (
           dashboard.reviews.map((review) => <Text key={review} style={styles.cardLine}>• {review}</Text>)
         )}
+        {dashboard.dueLimitNote ? <Text style={styles.limitNote}>{dashboard.dueLimitNote}</Text> : null}
       </View>
 
       <View style={styles.card}>
@@ -131,6 +180,9 @@ export function HomeScreen(props: HomeProps) {
         </Pressable>
         <Pressable style={styles.button} onPress={handlePractice} disabled={loading}>
           <Text style={styles.buttonText}>Submit Practice Session</Text>
+        </Pressable>
+        <Pressable style={styles.button} onPress={handleCompleteNextLessonDemo} disabled={loading}>
+          <Text style={styles.buttonText}>Complete Next Lesson (Demo)</Text>
         </Pressable>
         <Pressable style={styles.secondaryButton} onPress={handleRefresh} disabled={loading}>
           <Text style={styles.secondaryButtonText}>Refresh Session</Text>
@@ -148,10 +200,12 @@ const styles = StyleSheet.create({
   content: { padding: 16, gap: 14 },
   hero: { backgroundColor: theme.cardElevated, borderRadius: 18, padding: 18, gap: 8 },
   heroTitle: { color: theme.textPrimary, fontSize: 20, fontWeight: '700' },
+  planBadge: { color: theme.accent, fontWeight: '700' },
   heroSubtitle: { color: theme.textMuted },
   card: { backgroundColor: theme.card, borderRadius: 16, padding: 16, gap: 6 },
   cardTitle: { color: theme.textPrimary, fontWeight: '700' },
   cardLine: { color: theme.textMuted },
+  limitNote: { color: theme.accent, fontSize: 12, marginTop: 6 },
   streak: { color: theme.success, fontWeight: '700', fontSize: 18 },
   actions: { gap: 10 },
   button: { backgroundColor: theme.accent, borderRadius: 12, padding: 12 },

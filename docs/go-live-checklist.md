@@ -2,12 +2,25 @@
 
 This checklist is organized by release criticality so the team can ship in controlled stages.
 
+Execution companion:
+
+- `docs/external-go-live-execution-guide.md`
+
 ## P0 — Must complete before production launch
 
 ### Security and secrets
 - [ ] Rotate and securely store production secrets (`JWT_SECRET`, `JWT_REFRESH_SECRET`, `METRICS_TOKEN`) in a secret manager.
-- [ ] Enforce secret rotation policy (time-based + incident-triggered).
+- [ ] Enforce secret rotation policy (time-based + incident-triggered) per `docs/security-secret-rotation-policy.md`.
+- [ ] Verify secret policy requirements:
+  - `JWT_SECRET` and `JWT_REFRESH_SECRET` are each at least 32 characters.
+  - `JWT_SECRET` and `JWT_REFRESH_SECRET` are different values.
+  - `METRICS_TOKEN` is at least 24 characters.
+  - No placeholder/default-style values are used.
 - [ ] Ensure no secrets are logged (request bodies, auth headers, tokens).
+- [ ] Configure billing secrets and provider credentials:
+  - `BILLING_WEBHOOK_SECRET`
+  - `APPLE_SHARED_SECRET` (if iOS subscriptions are enabled)
+  - `GOOGLE_PLAY_PACKAGE_NAME` + `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` (if Android subscriptions are enabled)
 
 ### Runtime configuration
 - [ ] Set all required production environment variables:
@@ -18,11 +31,13 @@ This checklist is organized by release criticality so the team can ship in contr
   - `METRICS_TOKEN`
 - [ ] Configure `CORS_ORIGINS` to explicit production domains only.
 - [ ] Set `TRUST_PROXY=true` when running behind a load balancer or reverse proxy.
+- [ ] Ensure `BILLING_ALLOW_SANDBOX_PURCHASES=false` in production.
+- [ ] Run `./scripts/billing-release-readiness-check.sh` with production release env vars and resolve all failures.
 
 ### Data and database safety
 - [ ] Confirm all migrations apply cleanly on a production-like database snapshot.
 - [ ] Validate backup/restore procedures (full restore drill).
-- [ ] Define and test rollback procedure for both schema and app deploy.
+- [ ] Validate rollback procedure for both schema and app deploy (`current`/`previous` release symlink swap).
 
 ### API reliability
 - [ ] Enforce readiness/liveness probes in deployment platform (`/ready`, `/health`).
@@ -31,18 +46,26 @@ This checklist is organized by release criticality so the team can ship in contr
 
 ### Observability and on-call readiness
 - [ ] Restrict `/metrics` access to internal network and/or `METRICS_TOKEN` auth.
-- [ ] Add alerting thresholds for 5xx spikes, auth failures, latency, and readiness failures.
+- [ ] Deploy runtime alerting thresholds for 5xx spikes, auth failures, latency, and readiness failures from `ops/prometheus/moneta-alert-rules.yml`.
 - [ ] Capture structured logs centrally with retention policy and correlation by `x-request-id`.
 
 ### CI/CD gates
 - [ ] Require passing `lint`, `test`, and `build` jobs before merge/deploy.
-- [ ] Add required branch protection and prevent direct pushes to release branch.
+- [ ] Require passing integration tests for release gate (`REQUIRE_INTEGRATION_TESTS=true`).
+- [ ] Add required branch protection and prevent direct pushes to release branch (`./scripts/configure-branch-protection.sh` + `./scripts/verify-branch-protection.sh`).
 - [ ] Ensure deploy pipeline includes post-deploy health verification and rollback trigger.
+- [ ] Verify deploy concurrency guard is enabled (single production deployment at a time).
+- [ ] Confirm release retention policy (`KEEP_RELEASES`) and cleanup behavior are configured.
 
 ### Mobile production readiness
 - [ ] Validate Expo build profiles for production (`eas`/store pipeline as applicable).
 - [ ] Confirm `EXPO_PUBLIC_API_BASE_URL` points to production API over HTTPS.
+- [ ] Confirm store SKU env vars are set for release builds:
+  - `EXPO_PUBLIC_IOS_SUBSCRIPTION_PRODUCT_IDS`
+  - `EXPO_PUBLIC_ANDROID_SUBSCRIPTION_PRODUCT_IDS`
 - [ ] Verify secure auth persistence and logout flows on cold app restart.
+- [ ] Verify in-app account export/deletion flows meet App Store and Play policy requirements.
+- [ ] Complete store billing lifecycle validation using `docs/store-billing-qa-matrix-template.md`.
 
 ## P1 — Should complete in first post-launch sprint
 
@@ -59,6 +82,7 @@ This checklist is organized by release criticality so the team can ship in contr
 ### Operational excellence
 - [ ] Define SLOs/SLIs (availability, p95 latency, auth success rate).
 - [ ] Create runbooks for top incidents: DB outage, Redis outage, token refresh failures.
+  - Existing runbooks: `docs/runbooks/database-outage.md`, `docs/runbooks/redis-rate-limit-outage.md`, `docs/runbooks/auth-failure-spike.md`.
 - [ ] Document maintenance windows and incident escalation path.
 
 ### Product quality
@@ -77,6 +101,7 @@ This checklist is organized by release criticality so the team can ship in contr
 - [ ] Define data retention/deletion policy and user data export/deletion workflow.
 - [ ] Add privacy review and consent flows for analytics and telemetry.
 - [ ] Establish release sign-off checklist with engineering + product + operations owners.
+  - Draft compliance docs: `docs/compliance/privacy-policy.md`, `docs/compliance/subscription-terms.md`, `docs/compliance/account-data-deletion-policy.md`.
 
 ## Release go/no-go template
 

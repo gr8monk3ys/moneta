@@ -6,6 +6,10 @@ on:
     branches:
       - main
 
+concurrency:
+  group: moneta-production-deploy
+  cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -24,23 +28,59 @@ jobs:
           CORS_ORIGINS: ${{ secrets.CORS_ORIGINS }}
         run: ./scripts/production-readiness-check.sh
 
+      - name: Preflight billing release configuration
+        env:
+          NODE_ENV: production
+          BILLING_WEBHOOK_SECRET: ${{ secrets.BILLING_WEBHOOK_SECRET }}
+          APPLE_SHARED_SECRET: ${{ secrets.APPLE_SHARED_SECRET }}
+          GOOGLE_PLAY_PACKAGE_NAME: ${{ vars.GOOGLE_PLAY_PACKAGE_NAME }}
+          GOOGLE_PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+          BILLING_ALLOW_SANDBOX_PURCHASES: ${{ vars.BILLING_ALLOW_SANDBOX_PURCHASES }}
+          EXPO_PUBLIC_API_BASE_URL: ${{ vars.EXPO_PUBLIC_API_BASE_URL }}
+          EXPO_PUBLIC_IOS_SUBSCRIPTION_PRODUCT_IDS: ${{ vars.EXPO_PUBLIC_IOS_SUBSCRIPTION_PRODUCT_IDS }}
+          EXPO_PUBLIC_ANDROID_SUBSCRIPTION_PRODUCT_IDS: ${{ vars.EXPO_PUBLIC_ANDROID_SUBSCRIPTION_PRODUCT_IDS }}
+          ENABLE_IOS_SUBSCRIPTIONS: ${{ vars.ENABLE_IOS_SUBSCRIPTIONS }}
+          ENABLE_ANDROID_SUBSCRIPTIONS: ${{ vars.ENABLE_ANDROID_SUBSCRIPTIONS }}
+          REQUIRE_MOBILE_BILLING_VARS: 'true'
+        run: ./scripts/billing-release-readiness-check.sh
+
+      - name: Derive release id
+        id: release
+        run: echo "value=$(date -u +'%Y%m%d%H%M%S')-${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+
       - name: Deploy application
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
           DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          DEPLOY_SERVICE_NAME: ${{ secrets.DEPLOY_SERVICE_NAME }}
+          KEEP_RELEASES: ${{ vars.DEPLOY_KEEP_RELEASES }}
+          RELEASE_ID: ${{ steps.release.outputs.value }}
         run: ./scripts/deploy.sh
 
       - name: Health check
         env:
           HEALTHCHECK_URL: ${{ secrets.HEALTHCHECK_URL }}
-        run: curl --fail --retry 5 --retry-delay 5 "$HEALTHCHECK_URL/ready"
+          METRICS_TOKEN: ${{ secrets.METRICS_TOKEN }}
+        run: |
+          curl --fail --show-error --silent \
+            --retry 8 --retry-delay 5 --max-time 10 \
+            "$HEALTHCHECK_URL/health"
+
+          curl --fail --show-error --silent \
+            --retry 8 --retry-delay 5 --max-time 10 \
+            "$HEALTHCHECK_URL/ready"
+
+          curl --fail --show-error --silent \
+            --retry 5 --retry-delay 3 --max-time 10 \
+            -H "Authorization: Bearer ${METRICS_TOKEN}" \
+            "$HEALTHCHECK_URL/metrics" >/dev/null
 
   rollback:
     runs-on: ubuntu-latest
     needs: deploy
-    if: failure()
+    if: ${{ needs.deploy.result == 'failure' }}
     environment: production
     steps:
       - name: Checkout
@@ -50,5 +90,7 @@ jobs:
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
           DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          DEPLOY_SERVICE_NAME: ${{ secrets.DEPLOY_SERVICE_NAME }}
         run: ./scripts/rollback.sh

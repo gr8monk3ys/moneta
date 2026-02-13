@@ -1,27 +1,53 @@
+import { normalizeEntitlement } from './billing.js';
 import { users } from './data.js';
-import type { UserRepository } from './repository.js';
-import type { AuthUser, RefreshTokenRecord, UserProfile } from './types.js';
+import type { ConsumeRefreshTokenInput, UserRepository } from './repository.js';
+import type { AuthUser, BillingWebhookEventRecord, RefreshTokenRecord, UserProfile } from './types.js';
 
 export class InMemoryUserRepository implements UserRepository {
-  private readonly authUsers: Map<string, AuthUser> = new Map();
+  private readonly authUsersByEmail: Map<string, AuthUser> = new Map();
   private readonly refreshTokens: Map<string, RefreshTokenRecord> = new Map();
+  private readonly billingWebhookEvents: Map<string, BillingWebhookEventRecord> = new Map();
 
   public async createAuthUser(user: AuthUser): Promise<AuthUser> {
-    this.authUsers.set(user.email.toLowerCase(), user);
+    this.authUsersByEmail.set(user.email.toLowerCase(), user);
     return user;
   }
 
   public async getAuthUserByEmail(email: string): Promise<AuthUser | null> {
-    return this.authUsers.get(email.toLowerCase()) ?? null;
+    return this.authUsersByEmail.get(email.toLowerCase()) ?? null;
+  }
+
+  public async getAuthUserById(userId: string): Promise<AuthUser | null> {
+    for (const user of this.authUsersByEmail.values()) {
+      if (user.userId === userId) {
+        return user;
+      }
+    }
+
+    return null;
   }
 
   public async getUserProfile(userId: string): Promise<UserProfile | null> {
-    return users[userId] ?? null;
+    const existing = users[userId];
+    if (!existing) {
+      return null;
+    }
+
+    return {
+      ...existing,
+      entitlement: normalizeEntitlement(existing.entitlement),
+      completedLessons: existing.completedLessons ?? {}
+    };
   }
 
   public async upsertUserProfile(profile: UserProfile): Promise<UserProfile> {
-    users[profile.userId] = profile;
-    return profile;
+    const normalized: UserProfile = {
+      ...profile,
+      entitlement: normalizeEntitlement(profile.entitlement),
+      completedLessons: profile.completedLessons ?? {}
+    };
+    users[profile.userId] = normalized;
+    return normalized;
   }
 
   public async storeRefreshToken(record: RefreshTokenRecord): Promise<void> {
@@ -30,6 +56,36 @@ export class InMemoryUserRepository implements UserRepository {
 
   public async getRefreshToken(tokenId: string): Promise<RefreshTokenRecord | null> {
     return this.refreshTokens.get(tokenId) ?? null;
+  }
+
+  public async listRefreshTokensByUser(userId: string): Promise<RefreshTokenRecord[]> {
+    return [...this.refreshTokens.values()]
+      .filter((record) => record.userId === userId)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
+  public async consumeRefreshToken(input: ConsumeRefreshTokenInput): Promise<RefreshTokenRecord | null> {
+    const record = this.refreshTokens.get(input.tokenId);
+    if (!record) {
+      return null;
+    }
+
+    const isMatch = (
+      record.userId === input.userId &&
+      record.sessionId === input.sessionId &&
+      record.tokenHash === input.tokenHash
+    );
+
+    if (!isMatch || record.revokedAt || new Date(record.expiresAt).getTime() <= new Date(input.nowIso).getTime()) {
+      return null;
+    }
+
+    this.refreshTokens.set(input.tokenId, {
+      ...record,
+      revokedAt: input.nowIso
+    });
+
+    return record;
   }
 
   public async revokeRefreshToken(tokenId: string): Promise<void> {
@@ -68,6 +124,50 @@ export class InMemoryUserRepository implements UserRepository {
         revokedAt: new Date().toISOString()
       });
     }
+  }
+
+  public async hasProcessedBillingWebhookEvent(eventId: string): Promise<boolean> {
+    return this.billingWebhookEvents.has(eventId);
+  }
+
+  public async listBillingWebhookEventsByUser(userId: string): Promise<BillingWebhookEventRecord[]> {
+    return [...this.billingWebhookEvents.values()]
+      .filter((record) => record.userId === userId)
+      .sort((a, b) => new Date(b.processedAt).getTime() - new Date(a.processedAt).getTime());
+  }
+
+  public async markBillingWebhookEventProcessed(record: BillingWebhookEventRecord): Promise<void> {
+    this.billingWebhookEvents.set(record.eventId, record);
+  }
+
+  public async deleteUserAccount(userId: string): Promise<boolean> {
+    let deleted = false;
+
+    for (const [email, user] of this.authUsersByEmail.entries()) {
+      if (user.userId === userId) {
+        this.authUsersByEmail.delete(email);
+        deleted = true;
+      }
+    }
+
+    for (const [tokenId, token] of this.refreshTokens.entries()) {
+      if (token.userId === userId) {
+        this.refreshTokens.delete(tokenId);
+      }
+    }
+
+    for (const [eventId, event] of this.billingWebhookEvents.entries()) {
+      if (event.userId === userId) {
+        this.billingWebhookEvents.delete(eventId);
+      }
+    }
+
+    if (users[userId]) {
+      delete users[userId];
+      deleted = true;
+    }
+
+    return deleted;
   }
 
   public async pruneExpiredRefreshTokens(nowIso: string): Promise<number> {

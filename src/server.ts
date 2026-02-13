@@ -6,11 +6,13 @@ import type { Store } from 'express-rate-limit';
 import { RedisStore } from 'rate-limit-redis';
 import { createClient, type RedisClientType } from 'redis';
 import { createApp } from './app.js';
+import { createBillingVerifier } from './billing.verification.js';
 import { logError, logInfo } from './logger.js';
 import { MigrationRunner } from './migrations.js';
 import { InMemoryUserRepository } from './repository.memory.js';
 import { PostgresUserRepository } from './repository.postgres.js';
 import type { UserRepository } from './repository.js';
+import { resolveProtectedToken, resolveRequiredSecret } from './security.js';
 
 interface RepositoryResources {
   repository: UserRepository;
@@ -44,30 +46,6 @@ function parseBoolean(value: string | undefined, fallback: boolean): boolean {
   }
 
   return value.toLowerCase() === 'true';
-}
-
-function resolveSecret(nodeEnv: string, configured: string | undefined, envName: string): string {
-  if (configured && configured !== 'dev-secret-change-me') {
-    return configured;
-  }
-
-  if (nodeEnv === 'production') {
-    throw new Error(`${envName} must be set in production and cannot use the default fallback value`);
-  }
-
-  return 'dev-secret-change-me';
-}
-
-function resolveMetricsToken(nodeEnv: string, configured: string | undefined): string | undefined {
-  if (configured) {
-    return configured;
-  }
-
-  if (nodeEnv === 'production') {
-    throw new Error('METRICS_TOKEN must be set in production to protect /metrics');
-  }
-
-  return undefined;
 }
 
 function startRefreshTokenPruner(repository: UserRepository, intervalSeconds: number): NodeJS.Timeout {
@@ -164,14 +142,45 @@ async function closeServer(server: Server): Promise<void> {
 async function main(): Promise<void> {
   const nodeEnv = process.env.NODE_ENV ?? 'development';
   const port = parseIntOrDefault(process.env.PORT, 3000);
-  const jwtSecret = resolveSecret(nodeEnv, process.env.JWT_SECRET, 'JWT_SECRET');
-  const jwtRefreshSecret = resolveSecret(nodeEnv, process.env.JWT_REFRESH_SECRET, 'JWT_REFRESH_SECRET');
+  const jwtSecret = resolveRequiredSecret({
+    nodeEnv,
+    configured: process.env.JWT_SECRET,
+    envName: 'JWT_SECRET',
+    minLength: 32,
+    devFallback: 'dev-secret-change-me'
+  });
+  const jwtRefreshSecret = resolveRequiredSecret({
+    nodeEnv,
+    configured: process.env.JWT_REFRESH_SECRET,
+    envName: 'JWT_REFRESH_SECRET',
+    minLength: 32,
+    devFallback: 'dev-secret-change-me'
+  });
+
+  if (nodeEnv === 'production' && jwtSecret === jwtRefreshSecret) {
+    throw new Error('JWT_SECRET and JWT_REFRESH_SECRET must be different values in production');
+  }
+
   const jwtAccessTtlSeconds = parseIntOrDefault(process.env.JWT_ACCESS_TTL_SECONDS, 3600);
   const jwtRefreshTtlSeconds = parseIntOrDefault(process.env.JWT_REFRESH_TTL_SECONDS, 604800);
   const tokenPruneIntervalSeconds = parseIntOrDefault(process.env.REFRESH_TOKEN_PRUNE_INTERVAL_SECONDS, 300);
   const allowedOrigins = parseAllowedOrigins(process.env.CORS_ORIGINS);
-  const metricsToken = resolveMetricsToken(nodeEnv, process.env.METRICS_TOKEN);
+  const metricsToken = resolveProtectedToken({
+    nodeEnv,
+    configured: process.env.METRICS_TOKEN,
+    envName: 'METRICS_TOKEN',
+    minLength: 24
+  });
   const trustProxy = parseBoolean(process.env.TRUST_PROXY, nodeEnv === 'production');
+  const billingVerifier = createBillingVerifier({
+    nodeEnv,
+    allowSandboxTokens: parseBoolean(process.env.BILLING_ALLOW_SANDBOX_PURCHASES, nodeEnv !== 'production'),
+    webhookSecret: process.env.BILLING_WEBHOOK_SECRET,
+    appleSharedSecret: process.env.APPLE_SHARED_SECRET,
+    googlePackageName: process.env.GOOGLE_PLAY_PACKAGE_NAME,
+    googleServiceAccountJson: process.env.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON,
+    timeoutMs: parseIntOrDefault(process.env.BILLING_PROVIDER_TIMEOUT_MS, 8000)
+  });
 
   const repositoryResources = await createRepository(nodeEnv);
   const rateLimitResources = await createRateLimitResources(nodeEnv);
@@ -179,6 +188,7 @@ async function main(): Promise<void> {
 
   const app = createApp({
     repository: repositoryResources.repository,
+    billingVerifier,
     jwtSecret,
     jwtRefreshSecret,
     jwtAccessTtlSeconds,

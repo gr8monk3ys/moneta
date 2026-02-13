@@ -7,6 +7,26 @@ interface AuthPayload {
   sessionId?: string;
 }
 
+export type SubscriptionPlan = 'free' | 'pro';
+export type EntitlementSource = 'none' | 'ios' | 'android' | 'web' | 'admin';
+
+export interface Entitlement {
+  plan: SubscriptionPlan;
+  isActive: boolean;
+  source: EntitlementSource;
+  productId?: string;
+  currentPeriodEndsAt?: string;
+  updatedAt: string;
+}
+
+export interface FeatureAccess {
+  advancedTracks: boolean;
+  certificates: boolean;
+  streakRepair: boolean;
+  unlimitedReviews: boolean;
+  maxDueReviews: number | null;
+}
+
 export interface AuthResponse {
   accessToken: string;
   refreshToken: string;
@@ -26,12 +46,58 @@ export interface ProgressResponse {
   streakDays: number;
   masteredSkills: number;
   totalSkills: number;
+  plan: SubscriptionPlan;
+  premiumActive: boolean;
+  completedLessons?: number;
+  totalLessons?: number;
 }
 
 export interface TodayResponse {
   userId: string;
   dueReviews: Array<{ itemId: string; skillId: string; dueDate: string }>;
   nextLesson?: { lessonId: string; title: string; estimatedMinutes: number };
+  entitlement: Entitlement;
+  features: FeatureAccess;
+}
+
+export interface PathLesson {
+  lessonId: string;
+  title: string;
+  summary: string;
+  level: string;
+  track: 'core' | 'advanced';
+  premium: boolean;
+  estimatedMinutes: number;
+  locked: boolean;
+  completed: boolean;
+}
+
+export interface LessonDetailsResponse {
+  userId: string;
+  lesson: {
+    lessonId: string;
+    title: string;
+    summary: string;
+    level: string;
+    track: 'core' | 'advanced';
+    premium: boolean;
+    estimatedMinutes: number;
+    items: Array<{
+      itemId: string;
+      skillId: string;
+      prompt: string;
+      format?: 'mcq' | 'numeric' | 'scenario';
+      choices?: string[];
+      explanation?: string;
+    }>;
+  };
+}
+
+export interface PathResponse {
+  userId: string;
+  entitlement: Entitlement;
+  features: FeatureAccess;
+  lessons: PathLesson[];
 }
 
 interface PlacementResponse {
@@ -43,10 +109,67 @@ interface SessionResponse {
   userId: string;
   streakDays: number;
   scheduledReviews: Array<{ itemId: string; skillId: string; dueDate: string }>;
+  lessonProgress?: {
+    lessonId: string;
+    completed: boolean;
+    score: number;
+    correctCount: number;
+    totalItems: number;
+    coverage: number;
+  };
 }
 
 interface HealthResponse {
   status: string;
+}
+
+export interface EntitlementResponse {
+  userId: string;
+  entitlement: Entitlement;
+  features: FeatureAccess;
+}
+
+export interface AccountExportResponse {
+  userId: string;
+  email: string;
+  generatedAt: string;
+  profile: {
+    userId: string;
+    currentLevel: string;
+    streakDays: number;
+    lastActiveDate?: string;
+    skills: Record<string, { skillId: string; mastery: number; lastReviewedAt?: string; nextReviewAt?: string }>;
+    entitlement: Entitlement;
+  };
+  sessions: {
+    total: number;
+    active: number;
+    refreshTokens: Array<{
+      tokenId: string;
+      userId: string;
+      sessionId: string;
+      createdAt: string;
+      expiresAt: string;
+      revokedAt?: string;
+    }>;
+  };
+  billing: {
+    webhookEventsProcessed: number;
+    events: Array<{
+      eventId: string;
+      userId: string;
+      platform: 'ios' | 'android' | 'web';
+      productId: string;
+      payloadHash: string;
+      processedAt: string;
+    }>;
+  };
+}
+
+interface SyncEntitlementPayload {
+  platform: 'ios' | 'android' | 'web';
+  productId: string;
+  purchaseToken: string;
 }
 
 const refreshInflight = new Map<string, Promise<AuthResponse>>();
@@ -59,6 +182,23 @@ async function parseError(response: Response): Promise<never> {
 async function postJson<T>(path: string, payload: unknown, token?: string): Promise<T> {
   const response = await fetch(`${baseUrl}${path}`, {
     method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    return parseError(response);
+  }
+
+  return response.json() as Promise<T>;
+}
+
+async function deleteJson<T>(path: string, payload: unknown, token?: string): Promise<T> {
+  const response = await fetch(`${baseUrl}${path}`, {
+    method: 'DELETE',
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {})
@@ -153,6 +293,18 @@ export async function logoutAll(auth: AuthContext): Promise<void> {
   await withAuthRetry(auth, (token) => postJson('/api/auth/logout-all', {}, token));
 }
 
+export async function exportAccountData(auth: AuthContext): Promise<AccountExportResponse> {
+  return withAuthRetry(auth, (token) => getJson<AccountExportResponse>('/api/auth/account/export', token));
+}
+
+export async function deleteAccount(auth: AuthContext): Promise<{ userId: string; deleted: boolean; deletedAt: string }> {
+  return withAuthRetry(auth, (token) => deleteJson<{ userId: string; deleted: boolean; deletedAt: string }>(
+    '/api/auth/account',
+    { confirmation: 'DELETE_ACCOUNT' },
+    token
+  ));
+}
+
 export async function fetchProgress(userId: string, auth: AuthContext): Promise<ProgressResponse> {
   return withAuthRetry(auth, (token) => getJson<ProgressResponse>(`/api/progress/${userId}`, token));
 }
@@ -161,10 +313,38 @@ export async function fetchToday(userId: string, auth: AuthContext): Promise<Tod
   return withAuthRetry(auth, (token) => getJson<TodayResponse>(`/api/learn/today/${userId}`, token));
 }
 
+export async function fetchLearningPath(userId: string, auth: AuthContext): Promise<PathResponse> {
+  return withAuthRetry(auth, (token) => getJson<PathResponse>(`/api/learn/path/${userId}`, token));
+}
+
+export async function fetchLessonDetails(lessonId: string, auth: AuthContext): Promise<LessonDetailsResponse> {
+  return withAuthRetry(auth, (token) => getJson<LessonDetailsResponse>(`/api/learn/lessons/${lessonId}`, token));
+}
+
+export async function fetchEntitlement(userId: string, auth: AuthContext): Promise<EntitlementResponse> {
+  return withAuthRetry(auth, (token) => getJson<EntitlementResponse>(`/api/billing/entitlements/${userId}`, token));
+}
+
+export async function syncEntitlement(auth: AuthContext, payload: SyncEntitlementPayload): Promise<EntitlementResponse> {
+  return withAuthRetry(auth, (token) => postJson<EntitlementResponse>('/api/billing/entitlements/sync', payload, token));
+}
+
 export async function submitPlacement(auth: AuthContext, score: { correctAnswers: number; totalQuestions: number }): Promise<PlacementResponse> {
   return withAuthRetry(auth, (token) => postJson<PlacementResponse>('/api/onboarding/placement', score, token));
 }
 
-export async function completeSession(auth: AuthContext, itemResults: Array<{ skillId: string; isCorrect: boolean }>): Promise<SessionResponse> {
-  return withAuthRetry(auth, (token) => postJson<SessionResponse>('/api/sessions/complete', { itemResults }, token));
+export async function completeSession(
+  auth: AuthContext,
+  itemResults: Array<{ skillId: string; isCorrect: boolean }>,
+  options: { lessonId?: string; timeZone?: string } = {}
+): Promise<SessionResponse> {
+  return withAuthRetry(auth, (token) => postJson<SessionResponse>(
+    '/api/sessions/complete',
+    {
+      itemResults,
+      lessonId: options.lessonId,
+      timeZone: options.timeZone
+    },
+    token
+  ));
 }
