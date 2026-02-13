@@ -9,6 +9,8 @@ An iOS / Android finance-learning platform.
 - [Operations Guide](docs/operations.md)
 - [Go-Live Checklist](docs/go-live-checklist.md)
 - [Release Evidence Template](docs/release-evidence-template.md)
+- [Release Sign-Off Report (2026-02-13)](docs/release-signoff-2026-02-13.md)
+- [Parallel Agent Closeout Plan (2026-02-13)](docs/parallel-agent-closeout-2026-02-13.md)
 - [Multi-Agent Execution Plan](docs/multi-agent-execution-plan.md)
 - [PR Acceptance Checklist](docs/pr-acceptance-checklist.md)
 
