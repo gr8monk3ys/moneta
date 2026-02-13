@@ -10,6 +10,7 @@ describe('InMemoryUserRepository', () => {
     await repo.createAuthUser({ userId: 'u1', email: 'a@example.com', passwordHash: 'hash' });
     const auth = await repo.getAuthUserByEmail('a@example.com');
     expect(auth?.userId).toBe('u1');
+    expect((await repo.getAuthUserById('u1'))?.email).toBe('a@example.com');
 
     await repo.upsertUserProfile({
       userId: 'u1',
@@ -55,6 +56,7 @@ describe('InMemoryUserRepository', () => {
       nowIso
     });
     expect(consumedAgain).toBeNull();
+    expect((await repo.listRefreshTokensByUser('u1')).length).toBe(2);
 
     expect(await repo.hasProcessedBillingWebhookEvent('evt_1')).toBe(false);
     await repo.markBillingWebhookEventProcessed({
@@ -66,6 +68,7 @@ describe('InMemoryUserRepository', () => {
       processedAt: nowIso
     });
     expect(await repo.hasProcessedBillingWebhookEvent('evt_1')).toBe(true);
+    expect((await repo.listBillingWebhookEventsByUser('u1')).length).toBe(1);
 
     await repo.revokeRefreshToken('t1');
     expect((await repo.getRefreshToken('t1'))?.revokedAt).toBeTruthy();
@@ -75,6 +78,9 @@ describe('InMemoryUserRepository', () => {
 
     await repo.revokeRefreshTokensBySession('u1', 's1');
     await repo.revokeRefreshTokensByUser('u1');
+    expect(await repo.deleteUserAccount('u1')).toBe(true);
+    expect(await repo.getAuthUserById('u1')).toBeNull();
+    expect(await repo.getUserProfile('u1')).toBeNull();
     expect(await repo.checkReadiness()).toBe(true);
   });
 });

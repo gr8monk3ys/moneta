@@ -238,6 +238,47 @@ describe('Moneta API auth + learning flow', () => {
     expect(progress.status).toBe(200);
   });
 
+  it('returns curriculum path metadata and enforces premium lesson access', async () => {
+    const { app, accessToken } = await buildAuthedApp();
+
+    const pathResponse = await request(app)
+      .get('/api/learn/path/demo-user')
+      .set('Authorization', `Bearer ${accessToken}`);
+
+    expect(pathResponse.status).toBe(200);
+    expect(pathResponse.body.lessons.length).toBeGreaterThan(6);
+    expect(pathResponse.body.lessons.some((lesson: { premium: boolean; locked: boolean }) => lesson.premium && lesson.locked)).toBe(true);
+
+    const freeLesson = await request(app)
+      .get('/api/learn/lessons/lesson-cash-flow-f1-001')
+      .set('Authorization', `Bearer ${accessToken}`);
+
+    expect(freeLesson.status).toBe(200);
+    expect(freeLesson.body.lesson.items[0].correctAnswer).toBeUndefined();
+
+    const premiumDenied = await request(app)
+      .get('/api/learn/lessons/lesson-retirement-income-f4-001')
+      .set('Authorization', `Bearer ${accessToken}`);
+
+    expect(premiumDenied.status).toBe(402);
+
+    await request(app)
+      .post('/api/billing/entitlements/sync')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        platform: 'ios',
+        productId: 'moneta.pro.monthly',
+        purchaseToken: 'sandbox-premium-unlock-12345'
+      });
+
+    const premiumGranted = await request(app)
+      .get('/api/learn/lessons/lesson-retirement-income-f4-001')
+      .set('Authorization', `Bearer ${accessToken}`);
+
+    expect(premiumGranted.status).toBe(200);
+    expect(premiumGranted.body.lesson.premium).toBe(true);
+  });
+
   it('returns only reviews that are due based on persisted schedule', async () => {
     const { app, repository } = buildApp();
 
@@ -281,6 +322,45 @@ describe('Moneta API auth + learning flow', () => {
     expect(response.status).toBe(200);
     expect(response.body.dueReviews).toHaveLength(1);
     expect(response.body.dueReviews[0].skillId).toBe('due');
+  });
+
+  it('exports account data and supports authenticated account deletion', async () => {
+    const { app, accessToken } = await buildAuthedApp();
+
+    const exported = await request(app)
+      .get('/api/auth/account/export')
+      .set('Authorization', `Bearer ${accessToken}`);
+
+    expect(exported.status).toBe(200);
+    expect(exported.body.userId).toBe('demo-user');
+    expect(exported.body.email).toBe('demo@example.com');
+    expect(exported.body.profile.userId).toBe('demo-user');
+
+    const invalidDelete = await request(app)
+      .delete('/api/auth/account')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({});
+
+    expect(invalidDelete.status).toBe(400);
+
+    const deleted = await request(app)
+      .delete('/api/auth/account')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ confirmation: 'DELETE_ACCOUNT' });
+
+    expect(deleted.status).toBe(200);
+    expect(deleted.body.deleted).toBe(true);
+
+    const loginAfterDelete = await request(app).post('/api/auth/login').send({
+      email: 'demo@example.com',
+      password: 'password123'
+    });
+    expect(loginAfterDelete.status).toBe(401);
+
+    const progressAfterDelete = await request(app)
+      .get('/api/progress/demo-user')
+      .set('Authorization', `Bearer ${accessToken}`);
+    expect(progressAfterDelete.status).toBe(404);
   });
 
   it('returns free entitlements by default and upgrades on sync', async () => {
