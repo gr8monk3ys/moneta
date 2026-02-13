@@ -34,6 +34,10 @@ const refreshSchema = z.object({
   refreshToken: z.string().min(20)
 });
 
+const deleteAccountSchema = z.object({
+  confirmation: z.literal('DELETE_ACCOUNT')
+});
+
 async function issueTokenPair(deps: RouteDeps, userId: string, email: string, sessionId: string) {
   const accessToken = createAccessToken(userId, email, deps.jwtSecret, deps.jwtAccessTtlSeconds);
   const refresh = createRefreshToken(userId, email, sessionId, deps.jwtRefreshSecret, deps.jwtRefreshTtlSeconds);
@@ -150,6 +154,57 @@ async function logoutAllHandler(req: AuthenticatedRequest, res: Response, deps: 
   res.status(200).json({ success: true });
 }
 
+async function exportAccountHandler(req: AuthenticatedRequest, res: Response, deps: RouteDeps): Promise<void> {
+  const userId = String(req.auth?.sub ?? '');
+  const email = String(req.auth?.email ?? '');
+
+  const [profile, refreshTokens, billingEvents] = await Promise.all([
+    deps.repository.getUserProfile(userId),
+    deps.repository.listRefreshTokensByUser(userId),
+    deps.repository.listBillingWebhookEventsByUser(userId)
+  ]);
+
+  if (!profile) {
+    throw new ApiError(404, 'User not found');
+  }
+
+  res.status(200).json({
+    userId,
+    email,
+    generatedAt: new Date().toISOString(),
+    profile,
+    sessions: {
+      total: refreshTokens.length,
+      active: refreshTokens.filter((token) => !token.revokedAt && new Date(token.expiresAt).getTime() > Date.now()).length,
+      refreshTokens
+    },
+    billing: {
+      webhookEventsProcessed: billingEvents.length,
+      events: billingEvents
+    }
+  });
+}
+
+async function deleteAccountHandler(req: AuthenticatedRequest, res: Response, deps: RouteDeps): Promise<void> {
+  const parsed = deleteAccountSchema.safeParse(req.body);
+  if (!parsed.success) {
+    throw new ApiError(400, 'Invalid delete account payload', parsed.error.flatten());
+  }
+
+  const userId = String(req.auth?.sub ?? '');
+  const deleted = await deps.repository.deleteUserAccount(userId);
+
+  if (!deleted) {
+    throw new ApiError(404, 'User not found');
+  }
+
+  res.status(200).json({
+    userId,
+    deleted: true,
+    deletedAt: new Date().toISOString()
+  });
+}
+
 export function registerAuthRoutes(app: express.Express, deps: RouteDeps, authLimiter: RateLimitRequestHandler): void {
   app.post('/api/auth/register', authLimiter, (req, res, next) => {
     registerHandler(req, res, deps).catch(next);
@@ -169,5 +224,13 @@ export function registerAuthRoutes(app: express.Express, deps: RouteDeps, authLi
 
   app.post('/api/auth/logout-all', authenticateJwt(deps.jwtSecret), (req: AuthenticatedRequest, res, next) => {
     logoutAllHandler(req, res, deps).catch(next);
+  });
+
+  app.get('/api/auth/account/export', authenticateJwt(deps.jwtSecret), (req: AuthenticatedRequest, res, next) => {
+    exportAccountHandler(req, res, deps).catch(next);
+  });
+
+  app.delete('/api/auth/account', authenticateJwt(deps.jwtSecret), (req: AuthenticatedRequest, res, next) => {
+    deleteAccountHandler(req, res, deps).catch(next);
   });
 }

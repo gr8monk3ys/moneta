@@ -2,6 +2,7 @@ export type FinanceLevel = 'F1' | 'F2' | 'F3' | 'F4' | 'F5' | 'F6';
 export type SubscriptionPlan = 'free' | 'pro';
 export type EntitlementSource = 'none' | 'ios' | 'android' | 'web' | 'admin';
 export type BillingPlatform = 'ios' | 'android' | 'web';
+export type LessonTrack = 'core' | 'advanced';
 
 export interface SubscriptionEntitlement {
   plan: SubscriptionPlan;
@@ -63,8 +64,11 @@ export interface LessonItem {
 export interface Lesson {
   lessonId: string;
   title: string;
+  summary: string;
   estimatedMinutes: number;
   level: FinanceLevel;
+  track: LessonTrack;
+  premium: boolean;
   items: LessonItem[];
 }
 

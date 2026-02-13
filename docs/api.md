@@ -30,6 +30,17 @@ Revokes all refresh tokens for the current session.
 ### `POST /api/auth/logout-all`
 Revokes all refresh tokens for the authenticated user.
 
+### `GET /api/auth/account/export`
+Returns an authenticated user data export snapshot:
+- profile and entitlement state
+- refresh token session history
+- processed billing webhook history
+
+### `DELETE /api/auth/account`
+Deletes the authenticated account and related lifecycle data.
+- Required body:
+  - `confirmation`: must be `DELETE_ACCOUNT`
+
 ## Protected routes
 All routes below require `Authorization: Bearer <access-token>`.
 
@@ -40,6 +51,16 @@ Calculates and stores finance level from placement results for the authenticated
 Returns reviews that are currently due (based on persisted per-skill schedule) and next recommended lesson. `:userId` must match token subject.
 - Includes `entitlement` and `features` so clients can render free-vs-pro limits.
 - Free users are limited to a capped due-review queue (`features.maxDueReviews`), while active Pro users receive the full queue.
+- `nextLesson` returns lesson metadata only (no answer keys).
+
+### `GET /api/learn/path/:userId`
+Returns curriculum path metadata for the authenticated user.
+- Includes each lesson with `locked` flag based on entitlement (free vs pro).
+
+### `GET /api/learn/lessons/:lessonId`
+Returns lesson details for the authenticated user.
+- Premium lessons return `402` when the user does not have Pro access.
+- Lesson items exclude answer keys (`correctAnswer`) in API responses.
 
 ### `POST /api/sessions/complete`
 Stores item outcomes, updates streak, and schedules review items.

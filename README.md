@@ -39,8 +39,10 @@ This repository includes a TypeScript backend for the core loop with authenticat
 
 - auth register/login (`POST /api/auth/register`, `POST /api/auth/login`)
 - refresh/logout (`POST /api/auth/refresh`, `POST /api/auth/logout`, `POST /api/auth/logout-all`)
+- account export/deletion (`GET /api/auth/account/export`, `DELETE /api/auth/account`)
 - onboarding placement (`POST /api/onboarding/placement`)
 - daily learning feed (`GET /api/learn/today/:userId`)
+- curriculum path and lesson detail (`GET /api/learn/path/:userId`, `GET /api/learn/lessons/:lessonId`)
 - session completion with mastery/streak updates (`POST /api/sessions/complete`)
 - progress summary (`GET /api/progress/:userId`)
 - billing entitlement read/sync (`GET /api/billing/entitlements/:userId`, `POST /api/billing/entitlements/sync`)

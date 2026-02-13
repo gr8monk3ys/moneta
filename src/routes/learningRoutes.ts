@@ -3,7 +3,7 @@ import type { NextFunction } from 'express';
 import { z } from 'zod';
 import { authenticateJwt, type AuthenticatedRequest } from '../auth.js';
 import { normalizeEntitlement, resolveFeatureAccess } from '../billing.js';
-import { lessons } from '../data.js';
+import { getLessonById, getNextLessonForLevel, listCurriculum } from '../data.js';
 import { applyItemResult, isValidTimeZone, markSessionActivity, placeUser } from '../engine.js';
 import { ApiError } from '../errors.js';
 import type { ReviewItem, UserProfile } from '../types.js';
@@ -25,9 +25,18 @@ const sessionSchema = z.object({
 });
 
 const paramsSchema = z.object({ userId: z.string().min(1) });
+const lessonParamsSchema = z.object({ lessonId: z.string().min(1) });
 
 function validateParams(rawParams: unknown): z.infer<typeof paramsSchema> {
   const parsed = paramsSchema.safeParse(rawParams);
+  if (!parsed.success) {
+    throw new ApiError(400, 'Invalid route parameters', parsed.error.flatten());
+  }
+  return parsed.data;
+}
+
+function validateLessonParams(rawParams: unknown): z.infer<typeof lessonParamsSchema> {
+  const parsed = lessonParamsSchema.safeParse(rawParams);
   if (!parsed.success) {
     throw new ApiError(400, 'Invalid route parameters', parsed.error.flatten());
   }
@@ -106,6 +115,46 @@ function resolveTimeZone(...candidates: Array<string | undefined>): string {
   return 'UTC';
 }
 
+function toLessonOutline(lesson: {
+  lessonId: string;
+  title: string;
+  summary: string;
+  level: string;
+  track: string;
+  premium: boolean;
+  estimatedMinutes: number;
+}) {
+  return {
+    lessonId: lesson.lessonId,
+    title: lesson.title,
+    summary: lesson.summary,
+    level: lesson.level,
+    track: lesson.track,
+    premium: lesson.premium,
+    estimatedMinutes: lesson.estimatedMinutes
+  };
+}
+
+function toLessonDetails(lesson: {
+  lessonId: string;
+  title: string;
+  summary: string;
+  level: string;
+  track: string;
+  premium: boolean;
+  estimatedMinutes: number;
+  items: Array<{ itemId: string; skillId: string; prompt: string }>;
+}) {
+  return {
+    ...toLessonOutline(lesson),
+    items: lesson.items.map((item) => ({
+      itemId: item.itemId,
+      skillId: item.skillId,
+      prompt: item.prompt
+    }))
+  };
+}
+
 export function registerLearningRoutes(app: express.Express, deps: RouteDeps): void {
   app.post('/api/onboarding/placement', authenticateJwt(deps.jwtSecret), (req: AuthenticatedRequest, res, next: NextFunction) => {
     Promise.resolve().then(async () => {
@@ -128,13 +177,59 @@ export function registerLearningRoutes(app: express.Express, deps: RouteDeps): v
       ensureSelfAccess(req, userId);
       const user = await findUserOrThrow(deps, userId);
       const today = toDueReviews(user);
-      const nextLesson = lessons.find((lesson) => lesson.level === user.currentLevel) ?? lessons[0];
+      const nextLesson = getNextLessonForLevel(user.currentLevel, today.features.advancedTracks);
       res.status(200).json({
         userId,
         dueReviews: today.dueReviews,
-        nextLesson,
+        nextLesson: nextLesson ? toLessonOutline(nextLesson) : undefined,
         entitlement: today.entitlement,
         features: today.features
+      });
+    }).catch(next);
+  });
+
+  app.get('/api/learn/path/:userId', authenticateJwt(deps.jwtSecret), (req: AuthenticatedRequest, res, next: NextFunction) => {
+    Promise.resolve().then(async () => {
+      const { userId } = validateParams(req.params);
+      ensureSelfAccess(req, userId);
+      const user = await findUserOrThrow(deps, userId);
+
+      const entitlement = normalizeEntitlement(user.entitlement);
+      const features = resolveFeatureAccess(entitlement);
+      const curriculum = listCurriculum(true).map((lesson) => ({
+        ...toLessonOutline(lesson),
+        locked: lesson.premium && !features.advancedTracks
+      }));
+
+      res.status(200).json({
+        userId,
+        entitlement,
+        features,
+        lessons: curriculum
+      });
+    }).catch(next);
+  });
+
+  app.get('/api/learn/lessons/:lessonId', authenticateJwt(deps.jwtSecret), (req: AuthenticatedRequest, res, next: NextFunction) => {
+    Promise.resolve().then(async () => {
+      const { lessonId } = validateLessonParams(req.params);
+      const userId = String(req.auth?.sub ?? '');
+      const user = await findUserOrThrow(deps, userId);
+      const entitlement = normalizeEntitlement(user.entitlement);
+      const features = resolveFeatureAccess(entitlement);
+      const lesson = getLessonById(lessonId);
+
+      if (!lesson) {
+        throw new ApiError(404, 'Lesson not found');
+      }
+
+      if (lesson.premium && !features.advancedTracks) {
+        throw new ApiError(402, 'Pro subscription required for this lesson');
+      }
+
+      res.status(200).json({
+        userId,
+        lesson: toLessonDetails(lesson)
       });
     }).catch(next);
   });

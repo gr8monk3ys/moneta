@@ -54,6 +54,17 @@ function toRefreshRecord(row: Record<string, unknown>): RefreshTokenRecord {
   };
 }
 
+function toBillingWebhookRecord(row: Record<string, unknown>): BillingWebhookEventRecord {
+  return {
+    eventId: String(row.event_id),
+    userId: String(row.user_id),
+    platform: String(row.platform) as BillingWebhookEventRecord['platform'],
+    productId: String(row.product_id),
+    payloadHash: String(row.payload_hash),
+    processedAt: new Date(String(row.processed_at)).toISOString()
+  };
+}
+
 export class PostgresUserRepository implements UserRepository {
   public constructor(private readonly pool: Pool) {}
 
@@ -69,6 +80,24 @@ export class PostgresUserRepository implements UserRepository {
     const result = await this.pool.query(
       'SELECT user_id, email, password_hash FROM auth_users WHERE email = $1 LIMIT 1',
       [email.toLowerCase()]
+    );
+
+    const row = result.rows[0];
+    if (!row) {
+      return null;
+    }
+
+    return {
+      userId: String(row.user_id),
+      email: String(row.email),
+      passwordHash: String(row.password_hash)
+    };
+  }
+
+  public async getAuthUserById(userId: string): Promise<AuthUser | null> {
+    const result = await this.pool.query(
+      'SELECT user_id, email, password_hash FROM auth_users WHERE user_id = $1 LIMIT 1',
+      [userId]
     );
 
     const row = result.rows[0];
@@ -162,6 +191,20 @@ export class PostgresUserRepository implements UserRepository {
     return row ? toRefreshRecord(row as Record<string, unknown>) : null;
   }
 
+  public async listRefreshTokensByUser(userId: string): Promise<RefreshTokenRecord[]> {
+    const result = await this.pool.query(
+      `
+      SELECT token_id, user_id, session_id, token_hash, created_at, expires_at, revoked_at
+      FROM refresh_tokens
+      WHERE user_id = $1
+      ORDER BY created_at DESC
+      `,
+      [userId]
+    );
+
+    return result.rows.map((row) => toRefreshRecord(row as Record<string, unknown>));
+  }
+
   public async consumeRefreshToken(input: ConsumeRefreshTokenInput): Promise<RefreshTokenRecord | null> {
     const result = await this.pool.query(
       `
@@ -222,6 +265,20 @@ export class PostgresUserRepository implements UserRepository {
     return (result.rowCount ?? 0) > 0;
   }
 
+  public async listBillingWebhookEventsByUser(userId: string): Promise<BillingWebhookEventRecord[]> {
+    const result = await this.pool.query(
+      `
+      SELECT event_id, user_id, platform, product_id, payload_hash, processed_at
+      FROM billing_webhook_events
+      WHERE user_id = $1
+      ORDER BY processed_at DESC
+      `,
+      [userId]
+    );
+
+    return result.rows.map((row) => toBillingWebhookRecord(row as Record<string, unknown>));
+  }
+
   public async markBillingWebhookEventProcessed(record: BillingWebhookEventRecord): Promise<void> {
     await this.pool.query(
       `
@@ -238,6 +295,47 @@ export class PostgresUserRepository implements UserRepository {
         record.processedAt
       ]
     );
+  }
+
+  public async deleteUserAccount(userId: string): Promise<boolean> {
+    const client = await this.pool.connect();
+
+    try {
+      await client.query('BEGIN');
+
+      const tokenResult = await client.query(
+        'DELETE FROM refresh_tokens WHERE user_id = $1',
+        [userId]
+      );
+      const billingResult = await client.query(
+        'DELETE FROM billing_webhook_events WHERE user_id = $1',
+        [userId]
+      );
+      const profileResult = await client.query(
+        'DELETE FROM user_profiles WHERE user_id = $1',
+        [userId]
+      );
+      const authResult = await client.query(
+        'DELETE FROM auth_users WHERE user_id = $1',
+        [userId]
+      );
+
+      await client.query('COMMIT');
+
+      const removed = (
+        (tokenResult.rowCount ?? 0) +
+        (billingResult.rowCount ?? 0) +
+        (profileResult.rowCount ?? 0) +
+        (authResult.rowCount ?? 0)
+      );
+
+      return removed > 0;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   public async pruneExpiredRefreshTokens(nowIso: string): Promise<number> {

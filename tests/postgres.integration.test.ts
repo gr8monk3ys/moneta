@@ -66,4 +66,34 @@ describe.skipIf(!runIntegration)('Postgres integration', () => {
     expect(progress.status).toBe(200);
     expect(progress.body.currentLevel).toBe('F4');
   });
+
+  it('deletes account lifecycle data in postgres', async () => {
+    await request(app).post('/api/auth/register').send({
+      userId: 'pg-delete-user',
+      email: 'pg-delete-user@example.com',
+      password: 'password123'
+    });
+
+    const login = await request(app).post('/api/auth/login').send({
+      email: 'pg-delete-user@example.com',
+      password: 'password123'
+    });
+
+    const exported = await request(app)
+      .get('/api/auth/account/export')
+      .set('Authorization', `Bearer ${login.body.accessToken as string}`);
+    expect(exported.status).toBe(200);
+
+    const deleted = await request(app)
+      .delete('/api/auth/account')
+      .set('Authorization', `Bearer ${login.body.accessToken as string}`)
+      .send({ confirmation: 'DELETE_ACCOUNT' });
+    expect(deleted.status).toBe(200);
+
+    const relogin = await request(app).post('/api/auth/login').send({
+      email: 'pg-delete-user@example.com',
+      password: 'password123'
+    });
+    expect(relogin.status).toBe(401);
+  });
 });
