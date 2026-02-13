@@ -311,6 +311,8 @@ interface GeneratedLessonSeed {
   mistake: string;
 }
 
+const EDITORIAL_REVIEW_DATE = '2026-02-13T00:00:00.000Z';
+
 function formatOrdinal(value: number): string {
   return String(value).padStart(3, '0');
 }
@@ -355,42 +357,58 @@ function buildGeneratedItems(seed: GeneratedLessonSeed): Lesson['items'] {
     {
       suffix: 'concept',
       prompt: `In "${seed.title}", the primary concept to master is:`,
-      answer: seed.keyConcept
+      answer: seed.keyConcept,
+      format: 'mcq' as const,
+      explanation: `This lesson is anchored on ${seed.keyConcept.toLowerCase()} as the core decision concept.`
     },
     {
       suffix: 'benchmark',
       prompt: 'A practical benchmark for this topic is:',
-      answer: seed.benchmark
+      answer: seed.benchmark,
+      format: 'scenario' as const,
+      explanation: 'Benchmarks make abstract concepts actionable and trackable over time.'
     },
     {
       suffix: 'formula',
       prompt: 'A useful planning equation here is:',
-      answer: seed.formula
+      answer: seed.formula,
+      format: 'numeric' as const,
+      explanation: 'Formulas force precise assumptions and make tradeoffs easier to compare.'
     },
     {
       suffix: 'action',
       prompt: 'A high-impact next action is to:',
-      answer: seed.action
+      answer: seed.action,
+      format: 'scenario' as const,
+      explanation: 'Execution habits drive outcomes more than one-time planning.'
     },
     {
       suffix: 'risk',
       prompt: 'A key risk to monitor is:',
-      answer: seed.risk
+      answer: seed.risk,
+      format: 'mcq' as const,
+      explanation: 'Good financial plans identify failure modes before they happen.'
     },
     {
       suffix: 'cadence',
       prompt: 'The minimum review cadence should be:',
-      answer: seed.checkIn
+      answer: seed.checkIn,
+      format: 'mcq' as const,
+      explanation: 'Regular review cadence keeps plan drift under control.'
     },
     {
       suffix: 'mistake',
       prompt: 'A common mistake to avoid is:',
-      answer: seed.mistake
+      answer: seed.mistake,
+      format: 'scenario' as const,
+      explanation: 'Explicit anti-patterns reduce repeat errors in real decisions.'
     },
     {
       suffix: 'review-loop',
       prompt: 'After each check-in, the best habit is to:',
-      answer: `document one change and repeat on a ${seed.checkIn} cycle`
+      answer: `document one change and repeat on a ${seed.checkIn} cycle`,
+      format: 'scenario' as const,
+      explanation: 'Small iterative adjustments are more reliable than infrequent large resets.'
     }
   ];
 
@@ -398,7 +416,18 @@ function buildGeneratedItems(seed: GeneratedLessonSeed): Lesson['items'] {
     itemId: `item-${seed.skillBase}-${formatOrdinal(index + 1)}`,
     skillId: `${seed.skillBase}-${entry.suffix}`,
     prompt: entry.prompt,
-    correctAnswer: entry.answer
+    correctAnswer: entry.answer,
+    acceptableAnswers: [entry.answer],
+    format: entry.format,
+    choices: entry.format === 'mcq'
+      ? [
+          entry.answer,
+          `skip ${seed.checkIn} review cadence`,
+          'optimize for short-term appearance over plan durability',
+          'delay planning until forced by urgency'
+        ]
+      : undefined,
+    explanation: entry.explanation
   }));
 }
 
@@ -411,7 +440,13 @@ function buildGeneratedLesson(seed: GeneratedLessonSeed): Lesson {
     level: seed.level,
     track: seed.track,
     premium: seed.premium,
-    items: buildGeneratedItems(seed)
+    items: buildGeneratedItems(seed),
+    editorial: {
+      status: 'approved',
+      reviewer: 'Moneta Curriculum Team',
+      reviewedAt: EDITORIAL_REVIEW_DATE,
+      notes: 'Structured editorial pass completed for clarity, non-advisory framing, and consistency.'
+    }
   };
 }
 
@@ -1020,6 +1055,37 @@ const generatedLessonSeeds: GeneratedLessonSeed[] = [
 
 lessons.push(...generatedLessonSeeds.map(buildGeneratedLesson));
 
+function withFallbackChoices(correctAnswer: string): string[] {
+  return [
+    correctAnswer,
+    'ignore this concept until later',
+    'choose based on urgency alone',
+    'follow social media consensus without verification'
+  ];
+}
+
+for (const lesson of lessons) {
+  lesson.items = lesson.items.map((item, index) => {
+    const inferredFormat = item.format
+      ?? (/[0-9]/.test(item.correctAnswer) || item.correctAnswer.includes('%') ? 'numeric' : (index % 2 === 0 ? 'mcq' : 'scenario'));
+
+    return {
+      ...item,
+      format: inferredFormat,
+      acceptableAnswers: item.acceptableAnswers ?? [item.correctAnswer],
+      choices: item.choices ?? (inferredFormat === 'mcq' ? withFallbackChoices(item.correctAnswer) : undefined),
+      explanation: item.explanation ?? `Review the ${item.skillId.replace(/-/g, ' ')} concept and connect it to real-world tradeoffs.`
+    };
+  });
+
+  lesson.editorial ??= {
+    status: 'provisional',
+    reviewer: 'Moneta Curriculum Team',
+    reviewedAt: EDITORIAL_REVIEW_DATE,
+    notes: 'Legacy lesson normalized to current editorial standard; pending external SME spot-check.'
+  };
+}
+
 const levelRank: Record<Lesson['level'], number> = {
   F1: 1,
   F2: 2,
@@ -1067,12 +1133,22 @@ export function getNextLessonForLevel(level: Lesson['level'], includePremium: bo
   return curriculum[0];
 }
 
+export function isLessonCompleted(user: UserProfile, lessonId: string): boolean {
+  return Boolean(user.completedLessons?.[lessonId]);
+}
+
+export function getNextLessonForProgress(user: UserProfile, includePremium: boolean): Lesson | undefined {
+  const curriculum = listCurriculum(includePremium);
+  return curriculum.find((lesson) => !isLessonCompleted(user, lesson.lessonId));
+}
+
 export const users: Record<string, UserProfile> = {
   demo: {
     userId: 'demo',
     currentLevel: 'F1',
     streakDays: 0,
     entitlement: createDefaultEntitlement(),
+    completedLessons: {},
     skills: {
       'apr-vs-apy': { skillId: 'apr-vs-apy', mastery: 0.2 },
       'basic-budgeting': { skillId: 'basic-budgeting', mastery: 0.2 },

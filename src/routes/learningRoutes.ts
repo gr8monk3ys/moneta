@@ -3,7 +3,7 @@ import type { NextFunction } from 'express';
 import { z } from 'zod';
 import { authenticateJwt, type AuthenticatedRequest } from '../auth.js';
 import { normalizeEntitlement, resolveFeatureAccess } from '../billing.js';
-import { getLessonById, getNextLessonForLevel, listCurriculum } from '../data.js';
+import { getLessonById, getNextLessonForLevel, getNextLessonForProgress, isLessonCompleted, listCurriculum } from '../data.js';
 import { applyItemResult, isValidTimeZone, markSessionActivity, placeUser } from '../engine.js';
 import { ApiError } from '../errors.js';
 import type { ReviewItem, UserProfile } from '../types.js';
@@ -21,6 +21,7 @@ const sessionSchema = z.object({
       isCorrect: z.boolean()
     })
   ),
+  lessonId: z.string().min(1).optional(),
   timeZone: z.string().min(1).optional()
 });
 
@@ -62,6 +63,8 @@ function getProgressSummary(user: UserProfile) {
   const masteredSkills = skillStates.filter((skill) => skill.mastery >= 0.8).length;
   const entitlement = normalizeEntitlement(user.entitlement);
   const features = resolveFeatureAccess(entitlement);
+  const completedLessonCount = Object.keys(user.completedLessons ?? {}).length;
+  const totalLessons = listCurriculum(true).length;
 
   return {
     userId: user.userId,
@@ -70,7 +73,9 @@ function getProgressSummary(user: UserProfile) {
     masteredSkills,
     totalSkills: skillStates.length,
     plan: entitlement.plan,
-    premiumActive: features.unlimitedReviews
+    premiumActive: features.unlimitedReviews,
+    completedLessons: completedLessonCount,
+    totalLessons
   };
 }
 
@@ -143,15 +148,112 @@ function toLessonDetails(lesson: {
   track: string;
   premium: boolean;
   estimatedMinutes: number;
-  items: Array<{ itemId: string; skillId: string; prompt: string }>;
+  items: Array<{
+    itemId: string;
+    skillId: string;
+    prompt: string;
+    format?: string;
+    choices?: string[];
+    explanation?: string;
+  }>;
 }) {
   return {
     ...toLessonOutline(lesson),
     items: lesson.items.map((item) => ({
       itemId: item.itemId,
       skillId: item.skillId,
-      prompt: item.prompt
+      prompt: item.prompt,
+      format: item.format,
+      choices: item.choices,
+      explanation: item.explanation
     }))
+  };
+}
+
+function ensureCompletedLessons(user: UserProfile): Record<string, NonNullable<UserProfile['completedLessons']>[string]> {
+  if (!user.completedLessons) {
+    user.completedLessons = {};
+  }
+
+  return user.completedLessons;
+}
+
+function syncMasteryCompletions(user: UserProfile, nowIso: string): void {
+  const completedLessons = ensureCompletedLessons(user);
+
+  for (const lesson of listCurriculum(true)) {
+    if (completedLessons[lesson.lessonId]) {
+      continue;
+    }
+
+    const lessonSkillIds = [...new Set(lesson.items.map((item) => item.skillId))];
+    if (lessonSkillIds.length === 0) {
+      continue;
+    }
+
+    const masteredCount = lessonSkillIds.filter((skillId) => (user.skills[skillId]?.mastery ?? 0) >= 0.8).length;
+    if (masteredCount !== lessonSkillIds.length) {
+      continue;
+    }
+
+    completedLessons[lesson.lessonId] = {
+      lessonId: lesson.lessonId,
+      completedAt: nowIso,
+      score: 1,
+      correctCount: lessonSkillIds.length,
+      totalItems: lessonSkillIds.length
+    };
+  }
+}
+
+function evaluateLessonCompletion(
+  user: UserProfile,
+  lessonId: string,
+  itemResults: Array<{ skillId: string; isCorrect: boolean }>,
+  nowIso: string
+) {
+  const lesson = getLessonById(lessonId);
+  if (!lesson) {
+    throw new ApiError(404, 'Lesson not found');
+  }
+
+  const features = resolveFeatureAccess(normalizeEntitlement(user.entitlement));
+  if (lesson.premium && !features.advancedTracks) {
+    throw new ApiError(402, 'Pro subscription required for this lesson');
+  }
+
+  const lessonSkillIds = [...new Set(lesson.items.map((item) => item.skillId))];
+  const lessonSkillSet = new Set(lessonSkillIds);
+  const matchedResults = itemResults.filter((item) => lessonSkillSet.has(item.skillId));
+
+  if (matchedResults.length === 0) {
+    throw new ApiError(400, 'Session itemResults did not match lesson skills');
+  }
+
+  const coveredSkillIds = new Set(matchedResults.map((item) => item.skillId));
+  const coverage = coveredSkillIds.size / lessonSkillIds.length;
+  const correctCount = matchedResults.filter((item) => item.isCorrect).length;
+  const score = correctCount / matchedResults.length;
+  const completed = coverage >= 0.75 && score >= 0.7;
+
+  if (completed) {
+    const completedLessons = ensureCompletedLessons(user);
+    completedLessons[lesson.lessonId] = {
+      lessonId: lesson.lessonId,
+      completedAt: nowIso,
+      score: Number(score.toFixed(2)),
+      correctCount,
+      totalItems: lessonSkillIds.length
+    };
+  }
+
+  return {
+    lessonId: lesson.lessonId,
+    completed,
+    score: Number(score.toFixed(2)),
+    correctCount,
+    totalItems: lessonSkillIds.length,
+    coverage: Number(coverage.toFixed(2))
   };
 }
 
@@ -177,7 +279,8 @@ export function registerLearningRoutes(app: express.Express, deps: RouteDeps): v
       ensureSelfAccess(req, userId);
       const user = await findUserOrThrow(deps, userId);
       const today = toDueReviews(user);
-      const nextLesson = getNextLessonForLevel(user.currentLevel, today.features.advancedTracks);
+      const nextLesson = getNextLessonForProgress(user, today.features.advancedTracks)
+        ?? getNextLessonForLevel(user.currentLevel, today.features.advancedTracks);
       res.status(200).json({
         userId,
         dueReviews: today.dueReviews,
@@ -198,7 +301,8 @@ export function registerLearningRoutes(app: express.Express, deps: RouteDeps): v
       const features = resolveFeatureAccess(entitlement);
       const curriculum = listCurriculum(true).map((lesson) => ({
         ...toLessonOutline(lesson),
-        locked: lesson.premium && !features.advancedTracks
+        locked: lesson.premium && !features.advancedTracks,
+        completed: isLessonCompleted(user, lesson.lessonId)
       }));
 
       res.status(200).json({
@@ -253,12 +357,17 @@ export function registerLearningRoutes(app: express.Express, deps: RouteDeps): v
       const userId = String(req.auth?.sub ?? '');
       const user = await findUserOrThrow(deps, userId);
       const scheduledReviews = parsed.data.itemResults.map((item) => applyItemResult(user, item.skillId, item.isCorrect));
+      const nowIso = new Date().toISOString();
+      syncMasteryCompletions(user, nowIso);
+      const lessonProgress = parsed.data.lessonId
+        ? evaluateLessonCompletion(user, parsed.data.lessonId, parsed.data.itemResults, nowIso)
+        : undefined;
       const streakDays = markSessionActivity(user, {
         timeZone: resolveTimeZone(parsed.data.timeZone, req.header('x-user-timezone'))
       });
       await deps.repository.upsertUserProfile(user);
 
-      res.status(200).json({ userId, streakDays, scheduledReviews, skills: user.skills });
+      res.status(200).json({ userId, streakDays, scheduledReviews, skills: user.skills, lessonProgress });
     }).catch(next);
   });
 }

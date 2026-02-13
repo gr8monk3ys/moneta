@@ -279,6 +279,57 @@ describe('Moneta API auth + learning flow', () => {
     expect(premiumGranted.body.lesson.premium).toBe(true);
   });
 
+  it('tracks lesson completion and advances next lesson in ordered path', async () => {
+    const { app, accessToken } = await buildAuthedApp();
+
+    const initialToday = await request(app)
+      .get('/api/learn/today/demo-user')
+      .set('Authorization', `Bearer ${accessToken}`);
+
+    expect(initialToday.status).toBe(200);
+    const initialLessonId = String(initialToday.body.nextLesson.lessonId);
+    expect(initialLessonId).toBeTruthy();
+
+    const initialLessonResponse = await request(app)
+      .get(`/api/learn/lessons/${initialLessonId}`)
+      .set('Authorization', `Bearer ${accessToken}`);
+
+    expect(initialLessonResponse.status).toBe(200);
+    const lessonSkillIds = [...new Set(
+      initialLessonResponse.body.lesson.items.map((item: { skillId: string }) => item.skillId)
+    )];
+    expect(lessonSkillIds.length).toBeGreaterThan(0);
+
+    const completion = await request(app)
+      .post('/api/sessions/complete')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        lessonId: initialLessonId,
+        itemResults: lessonSkillIds.map((skillId) => ({ skillId, isCorrect: true }))
+      });
+
+    expect(completion.status).toBe(200);
+    expect(completion.body.lessonProgress).toMatchObject({
+      lessonId: initialLessonId,
+      completed: true
+    });
+
+    const pathResponse = await request(app)
+      .get('/api/learn/path/demo-user')
+      .set('Authorization', `Bearer ${accessToken}`);
+
+    expect(pathResponse.status).toBe(200);
+    const completedLesson = pathResponse.body.lessons.find((lesson: { lessonId: string }) => lesson.lessonId === initialLessonId);
+    expect(completedLesson?.completed).toBe(true);
+
+    const nextToday = await request(app)
+      .get('/api/learn/today/demo-user')
+      .set('Authorization', `Bearer ${accessToken}`);
+
+    expect(nextToday.status).toBe(200);
+    expect(nextToday.body.nextLesson?.lessonId).not.toBe(initialLessonId);
+  });
+
   it('returns only reviews that are due based on persisted schedule', async () => {
     const { app, repository } = buildApp();
 

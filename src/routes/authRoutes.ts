@@ -75,7 +75,8 @@ async function registerHandler(req: Request, res: Response, deps: RouteDeps): Pr
     currentLevel: 'F1',
     streakDays: 0,
     skills: {},
-    entitlement: createDefaultEntitlement()
+    entitlement: createDefaultEntitlement(),
+    completedLessons: {}
   });
 
   res.status(201).json({ userId, email: normalizedEmail });

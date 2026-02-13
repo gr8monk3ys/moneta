@@ -3,6 +3,8 @@ export type SubscriptionPlan = 'free' | 'pro';
 export type EntitlementSource = 'none' | 'ios' | 'android' | 'web' | 'admin';
 export type BillingPlatform = 'ios' | 'android' | 'web';
 export type LessonTrack = 'core' | 'advanced';
+export type LessonItemFormat = 'mcq' | 'numeric' | 'scenario';
+export type EditorialReviewStatus = 'approved' | 'provisional';
 
 export interface SubscriptionEntitlement {
   plan: SubscriptionPlan;
@@ -20,6 +22,14 @@ export interface SkillState {
   nextReviewAt?: string;
 }
 
+export interface LessonCompletionRecord {
+  lessonId: string;
+  completedAt: string;
+  score: number;
+  correctCount: number;
+  totalItems: number;
+}
+
 export interface UserProfile {
   userId: string;
   currentLevel: FinanceLevel;
@@ -27,6 +37,7 @@ export interface UserProfile {
   lastActiveDate?: string;
   skills: Record<string, SkillState>;
   entitlement: SubscriptionEntitlement;
+  completedLessons?: Record<string, LessonCompletionRecord>;
 }
 
 export interface AuthUser {
@@ -59,6 +70,17 @@ export interface LessonItem {
   skillId: string;
   prompt: string;
   correctAnswer: string;
+  acceptableAnswers?: string[];
+  format?: LessonItemFormat;
+  choices?: string[];
+  explanation?: string;
+}
+
+export interface LessonEditorialReview {
+  status: EditorialReviewStatus;
+  reviewer: string;
+  reviewedAt: string;
+  notes: string;
 }
 
 export interface Lesson {
@@ -70,6 +92,7 @@ export interface Lesson {
   track: LessonTrack;
   premium: boolean;
   items: LessonItem[];
+  editorial?: LessonEditorialReview;
 }
 
 export interface ReviewItem {

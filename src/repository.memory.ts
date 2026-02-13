@@ -35,14 +35,16 @@ export class InMemoryUserRepository implements UserRepository {
 
     return {
       ...existing,
-      entitlement: normalizeEntitlement(existing.entitlement)
+      entitlement: normalizeEntitlement(existing.entitlement),
+      completedLessons: existing.completedLessons ?? {}
     };
   }
 
   public async upsertUserProfile(profile: UserProfile): Promise<UserProfile> {
     const normalized: UserProfile = {
       ...profile,
-      entitlement: normalizeEntitlement(profile.entitlement)
+      entitlement: normalizeEntitlement(profile.entitlement),
+      completedLessons: profile.completedLessons ?? {}
     };
     users[profile.userId] = normalized;
     return normalized;

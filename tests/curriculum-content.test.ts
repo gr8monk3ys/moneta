@@ -20,4 +20,23 @@ describe('curriculum content depth', () => {
     expect(curriculum.some((lesson) => lesson.premium)).toBe(true);
     expect(curriculum.some((lesson) => !lesson.premium)).toBe(true);
   });
+
+  it('includes editorial review metadata and rich item formats', () => {
+    const curriculum = listCurriculum(true);
+
+    for (const lesson of curriculum) {
+      expect(lesson.editorial).toBeDefined();
+      expect(lesson.editorial?.reviewer.length).toBeGreaterThan(0);
+      expect(lesson.items.length).toBeGreaterThanOrEqual(2);
+      expect(lesson.items.some((item) => item.explanation)).toBe(true);
+      expect(lesson.items.some((item) => item.format === 'mcq' || item.format === 'scenario' || item.format === 'numeric')).toBe(true);
+    }
+
+    const mixedFormatLessons = curriculum.filter((lesson) => {
+      const formats = new Set(lesson.items.map((item) => item.format));
+      return formats.size >= 2;
+    });
+
+    expect(mixedFormatLessons.length).toBeGreaterThanOrEqual(30);
+  });
 });
