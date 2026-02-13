@@ -4,6 +4,7 @@ export interface SkillState {
   skillId: string;
   mastery: number;
   lastReviewedAt?: string;
+  nextReviewAt?: string;
 }
 
 export interface UserProfile {

@@ -230,6 +230,50 @@ describe('Moneta API auth + learning flow', () => {
     expect(progress.status).toBe(200);
   });
 
+  it('returns only reviews that are due based on persisted schedule', async () => {
+    const { app, repository } = buildApp();
+
+    await request(app).post('/api/auth/register').send({
+      userId: 'review-user',
+      email: 'review-user@example.com',
+      password: 'password123'
+    });
+
+    const login = await request(app).post('/api/auth/login').send({
+      email: 'review-user@example.com',
+      password: 'password123'
+    });
+
+    const now = Date.now();
+    await repository.upsertUserProfile({
+      userId: 'review-user',
+      currentLevel: 'F2',
+      streakDays: 2,
+      skills: {
+        due: {
+          skillId: 'due',
+          mastery: 0.4,
+          lastReviewedAt: new Date(now - 86_400_000).toISOString(),
+          nextReviewAt: new Date(now - 60_000).toISOString()
+        },
+        future: {
+          skillId: 'future',
+          mastery: 0.7,
+          lastReviewedAt: new Date(now).toISOString(),
+          nextReviewAt: new Date(now + 86_400_000).toISOString()
+        }
+      }
+    });
+
+    const response = await request(app)
+      .get('/api/learn/today/review-user')
+      .set('Authorization', `Bearer ${login.body.accessToken as string}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.dueReviews).toHaveLength(1);
+    expect(response.body.dueReviews[0].skillId).toBe('due');
+  });
+
   it('requires metrics token when configured and exposes health/readiness', async () => {
     const app = createApp({
       repository: new InMemoryUserRepository(),

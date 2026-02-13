@@ -3,7 +3,7 @@ import type { NextFunction } from 'express';
 import { z } from 'zod';
 import { authenticateJwt, type AuthenticatedRequest } from '../auth.js';
 import { lessons } from '../data.js';
-import { applyItemResult, markSessionActivity, placeUser } from '../engine.js';
+import { applyItemResult, isValidTimeZone, markSessionActivity, placeUser } from '../engine.js';
 import { ApiError } from '../errors.js';
 import type { ReviewItem, UserProfile } from '../types.js';
 import type { RouteDeps } from './types.js';
@@ -19,7 +19,8 @@ const sessionSchema = z.object({
       skillId: z.string().min(1),
       isCorrect: z.boolean()
     })
-  )
+  ),
+  timeZone: z.string().min(1).optional()
 });
 
 const paramsSchema = z.object({ userId: z.string().min(1) });
@@ -60,13 +61,31 @@ function getProgressSummary(user: UserProfile) {
 }
 
 function toDueReviews(user: UserProfile): ReviewItem[] {
+  const nowMs = Date.now();
+
   return Object.values(user.skills)
-    .filter((skill) => !!skill.lastReviewedAt)
+    .filter((skill) => {
+      if (!skill.nextReviewAt) {
+        return false;
+      }
+
+      return new Date(skill.nextReviewAt).getTime() <= nowMs;
+    })
     .map((skill) => ({
       itemId: `${skill.skillId}-due`,
       skillId: skill.skillId,
-      dueDate: new Date().toISOString()
+      dueDate: String(skill.nextReviewAt)
     }));
+}
+
+function resolveTimeZone(...candidates: Array<string | undefined>): string {
+  for (const candidate of candidates) {
+    if (candidate && isValidTimeZone(candidate)) {
+      return candidate;
+    }
+  }
+
+  return 'UTC';
 }
 
 export function registerLearningRoutes(app: express.Express, deps: RouteDeps): void {
@@ -115,7 +134,9 @@ export function registerLearningRoutes(app: express.Express, deps: RouteDeps): v
       const userId = String(req.auth?.sub ?? '');
       const user = await findUserOrThrow(deps, userId);
       const scheduledReviews = parsed.data.itemResults.map((item) => applyItemResult(user, item.skillId, item.isCorrect));
-      const streakDays = markSessionActivity(user);
+      const streakDays = markSessionActivity(user, {
+        timeZone: resolveTimeZone(parsed.data.timeZone, req.header('x-user-timezone'))
+      });
       await deps.repository.upsertUserProfile(user);
 
       res.status(200).json({ userId, streakDays, scheduledReviews, skills: user.skills });
