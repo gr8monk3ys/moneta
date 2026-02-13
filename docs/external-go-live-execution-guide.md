@@ -69,7 +69,6 @@ RUN_PRODUCTION_CHECK=true \
 RUN_BILLING_CHECK=true \
 RUN_BRANCH_PROTECTION_CHECK=true \
 REQUIRE_INTEGRATION_TESTS=true \
-REQUIRE_BILLING_RELEASE_CONFIG=true \
 ./scripts/collect-release-evidence.sh
 ```
 

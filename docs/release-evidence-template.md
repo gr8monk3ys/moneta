@@ -17,7 +17,7 @@ Use this document for each production release candidate before final go/no-go.
 ### Automated evidence bundle (recommended)
 
 - Command:
-  - `RUN_FINAL_GATE=true RUN_PRODUCTION_CHECK=true RUN_BILLING_CHECK=true RUN_BRANCH_PROTECTION_CHECK=true REQUIRE_INTEGRATION_TESTS=true REQUIRE_BILLING_RELEASE_CONFIG=true ./scripts/collect-release-evidence.sh`
+  - `RUN_FINAL_GATE=true RUN_PRODUCTION_CHECK=true RUN_BILLING_CHECK=true RUN_BRANCH_PROTECTION_CHECK=true REQUIRE_INTEGRATION_TESTS=true ./scripts/collect-release-evidence.sh`
 - Result: `<pass/fail>`
 - Bundle path:
   - `artifacts/release-evidence/<timestamp>/`
