@@ -2,6 +2,20 @@
 
 This plan closes all current P0 blockers from `docs/release-signoff-2026-02-13.md`.
 
+## In-repo baseline now prepared
+
+- Branch protection automation scripts:
+  - `scripts/configure-branch-protection.sh`
+  - `scripts/verify-branch-protection.sh`
+- Runtime alert baseline: `ops/prometheus/moneta-alert-rules.yml`
+- Secret policy + compliance docs:
+  - `docs/security-secret-rotation-policy.md`
+  - `docs/compliance/privacy-policy.md`
+  - `docs/compliance/subscription-terms.md`
+  - `docs/compliance/account-data-deletion-policy.md`
+- Redacted env evidence generator:
+  - `scripts/generate-redacted-env-report.sh`
+
 ## Agent 1: Secrets and Runtime Config
 
 - Scope:
@@ -80,4 +94,3 @@ This plan closes all current P0 blockers from `docs/release-signoff-2026-02-13.m
   - `docs/release-evidence-template.md`
 - Decision rule:
   - Launch only when all five agent streams are complete and no P0 blocker remains.
-

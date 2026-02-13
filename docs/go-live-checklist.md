@@ -6,7 +6,7 @@ This checklist is organized by release criticality so the team can ship in contr
 
 ### Security and secrets
 - [ ] Rotate and securely store production secrets (`JWT_SECRET`, `JWT_REFRESH_SECRET`, `METRICS_TOKEN`) in a secret manager.
-- [ ] Enforce secret rotation policy (time-based + incident-triggered).
+- [ ] Enforce secret rotation policy (time-based + incident-triggered) per `docs/security-secret-rotation-policy.md`.
 - [ ] Verify secret policy requirements:
   - `JWT_SECRET` and `JWT_REFRESH_SECRET` are each at least 32 characters.
   - `JWT_SECRET` and `JWT_REFRESH_SECRET` are different values.
@@ -42,13 +42,13 @@ This checklist is organized by release criticality so the team can ship in contr
 
 ### Observability and on-call readiness
 - [ ] Restrict `/metrics` access to internal network and/or `METRICS_TOKEN` auth.
-- [ ] Add alerting thresholds for 5xx spikes, auth failures, latency, and readiness failures.
+- [ ] Deploy runtime alerting thresholds for 5xx spikes, auth failures, latency, and readiness failures from `ops/prometheus/moneta-alert-rules.yml`.
 - [ ] Capture structured logs centrally with retention policy and correlation by `x-request-id`.
 
 ### CI/CD gates
 - [ ] Require passing `lint`, `test`, and `build` jobs before merge/deploy.
 - [ ] Require passing integration tests for release gate (`REQUIRE_INTEGRATION_TESTS=true`).
-- [ ] Add required branch protection and prevent direct pushes to release branch.
+- [ ] Add required branch protection and prevent direct pushes to release branch (`./scripts/configure-branch-protection.sh` + `./scripts/verify-branch-protection.sh`).
 - [ ] Ensure deploy pipeline includes post-deploy health verification and rollback trigger.
 - [ ] Verify deploy concurrency guard is enabled (single production deployment at a time).
 - [ ] Confirm release retention policy (`KEEP_RELEASES`) and cleanup behavior are configured.
@@ -77,6 +77,7 @@ This checklist is organized by release criticality so the team can ship in contr
 ### Operational excellence
 - [ ] Define SLOs/SLIs (availability, p95 latency, auth success rate).
 - [ ] Create runbooks for top incidents: DB outage, Redis outage, token refresh failures.
+  - Existing runbooks: `docs/runbooks/database-outage.md`, `docs/runbooks/redis-rate-limit-outage.md`, `docs/runbooks/auth-failure-spike.md`.
 - [ ] Document maintenance windows and incident escalation path.
 
 ### Product quality
@@ -95,6 +96,7 @@ This checklist is organized by release criticality so the team can ship in contr
 - [ ] Define data retention/deletion policy and user data export/deletion workflow.
 - [ ] Add privacy review and consent flows for analytics and telemetry.
 - [ ] Establish release sign-off checklist with engineering + product + operations owners.
+  - Draft compliance docs: `docs/compliance/privacy-policy.md`, `docs/compliance/subscription-terms.md`, `docs/compliance/account-data-deletion-policy.md`.
 
 ## Release go/no-go template
 

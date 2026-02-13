@@ -40,6 +40,15 @@ Use this document for each production release candidate before final go/no-go.
 - Rollback drill executed: `<yes/no>`
 - Rollback target validated: `<release id>`
 
+### Branch protection and governance
+
+- `./scripts/verify-branch-protection.sh main`: `<pass/fail>`
+- Required checks present (`quality`, `mobile-quality`, `final-gate`): `<yes/no>`
+- Compliance docs reviewed by legal:
+  - privacy policy: `<yes/no>`
+  - subscription terms: `<yes/no>`
+  - account/data deletion policy: `<yes/no>`
+
 ### Billing lifecycle checks
 
 - Purchase sync (`/api/billing/entitlements/sync`) tested on iOS sandbox: `<pass/fail>`

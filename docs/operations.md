@@ -26,19 +26,32 @@
 ## Alerting
 - `.github/workflows/alerts.yml` posts webhook notifications on CI/deploy failures.
 - Configure `ALERT_WEBHOOK_URL` as a repository secret.
+- Runtime alert rules for production are defined in `ops/prometheus/moneta-alert-rules.yml`.
+- Production observability setup (metrics, probes, log retention/correlation) is documented in `docs/observability-production-setup.md`.
 
 ## Runtime observability
 - Structured logs include request IDs (`x-request-id`).
 - Prometheus metrics are available at `GET /metrics`.
+- Runbooks for critical incidents:
+  - `docs/runbooks/database-outage.md`
+  - `docs/runbooks/redis-rate-limit-outage.md`
+  - `docs/runbooks/auth-failure-spike.md`
+
+## Branch protection
+- Apply baseline branch protection controls with `./scripts/configure-branch-protection.sh`.
+- Verify settings with `./scripts/verify-branch-protection.sh`.
+- Required checks default to: `quality`, `mobile-quality`, `final-gate`.
 
 
 ## Go-live checklist
 - Use `docs/go-live-checklist.md` as the release gate before enabling production traffic.
 - Record final verification and release sign-off evidence using `docs/release-evidence-template.md`.
+- Use `docs/security-secret-rotation-policy.md` and `docs/compliance/` docs for security/compliance artifacts required by store submission.
 
 ## Production readiness verification
 - Run `./scripts/production-readiness-check.sh` before deployment to validate required production environment variables and reject insecure defaults.
 - This script is intended as a preflight guardrail and should be wired into your deploy pipeline.
+- Generate a redacted environment evidence artifact with `./scripts/generate-redacted-env-report.sh` for release records.
 
 ## Final release verification gate
 - Run `./scripts/final-verification-gate.sh` before release go/no-go.

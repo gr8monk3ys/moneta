@@ -28,6 +28,22 @@ jobs:
           CORS_ORIGINS: ${{ secrets.CORS_ORIGINS }}
         run: ./scripts/production-readiness-check.sh
 
+      - name: Preflight billing release configuration
+        env:
+          NODE_ENV: production
+          BILLING_WEBHOOK_SECRET: ${{ secrets.BILLING_WEBHOOK_SECRET }}
+          APPLE_SHARED_SECRET: ${{ secrets.APPLE_SHARED_SECRET }}
+          GOOGLE_PLAY_PACKAGE_NAME: ${{ vars.GOOGLE_PLAY_PACKAGE_NAME }}
+          GOOGLE_PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+          BILLING_ALLOW_SANDBOX_PURCHASES: ${{ vars.BILLING_ALLOW_SANDBOX_PURCHASES }}
+          EXPO_PUBLIC_API_BASE_URL: ${{ vars.EXPO_PUBLIC_API_BASE_URL }}
+          EXPO_PUBLIC_IOS_SUBSCRIPTION_PRODUCT_IDS: ${{ vars.EXPO_PUBLIC_IOS_SUBSCRIPTION_PRODUCT_IDS }}
+          EXPO_PUBLIC_ANDROID_SUBSCRIPTION_PRODUCT_IDS: ${{ vars.EXPO_PUBLIC_ANDROID_SUBSCRIPTION_PRODUCT_IDS }}
+          ENABLE_IOS_SUBSCRIPTIONS: ${{ vars.ENABLE_IOS_SUBSCRIPTIONS }}
+          ENABLE_ANDROID_SUBSCRIPTIONS: ${{ vars.ENABLE_ANDROID_SUBSCRIPTIONS }}
+          REQUIRE_MOBILE_BILLING_VARS: 'true'
+        run: ./scripts/billing-release-readiness-check.sh
+
       - name: Derive release id
         id: release
         run: echo "value=$(date -u +'%Y%m%d%H%M%S')-${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
@@ -46,10 +62,20 @@ jobs:
       - name: Health check
         env:
           HEALTHCHECK_URL: ${{ secrets.HEALTHCHECK_URL }}
+          METRICS_TOKEN: ${{ secrets.METRICS_TOKEN }}
         run: |
           curl --fail --show-error --silent \
             --retry 8 --retry-delay 5 --max-time 10 \
+            "$HEALTHCHECK_URL/health"
+
+          curl --fail --show-error --silent \
+            --retry 8 --retry-delay 5 --max-time 10 \
             "$HEALTHCHECK_URL/ready"
+
+          curl --fail --show-error --silent \
+            --retry 5 --retry-delay 3 --max-time 10 \
+            -H "Authorization: Bearer ${METRICS_TOKEN}" \
+            "$HEALTHCHECK_URL/metrics" >/dev/null
 
   rollback:
     runs-on: ubuntu-latest
