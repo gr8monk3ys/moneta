@@ -99,4 +99,10 @@ export interface ReviewItem {
   itemId: string;
   skillId: string;
   dueDate: string;
+  contentItemId?: string;
+  prompt?: string;
+  format?: LessonItemFormat;
+  choices?: string[];
+  explanation?: string;
+  locked?: boolean;
 }

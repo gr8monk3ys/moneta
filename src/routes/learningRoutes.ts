@@ -26,23 +26,13 @@ const sessionSchema = z.object({
   lessonId: z.string().min(1).optional(),
   timeZone: z.string().min(1).optional()
 }).superRefine((data, ctx) => {
-  if (!data.lessonId) {
-    const invalid = data.itemResults.find((item) => typeof item.isCorrect !== 'boolean');
-    if (invalid) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'Session itemResults must include isCorrect when lessonId is not provided',
-        path: ['itemResults']
-      });
-    }
-    return;
-  }
-
   const missingOutcome = data.itemResults.find((item) => typeof item.isCorrect !== 'boolean' && !item.answer);
   if (missingOutcome) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
-      message: 'Session itemResults must include isCorrect or answer when lessonId is provided',
+      message: data.lessonId
+        ? 'Session itemResults must include isCorrect or answer when lessonId is provided'
+        : 'Session itemResults must include isCorrect or answer when lessonId is not provided',
       path: ['itemResults']
     });
   }
@@ -116,6 +106,16 @@ function toDueReviews(user: UserProfile): { dueReviews: ReviewItem[]; entitlemen
   const entitlement = normalizeEntitlement(user.entitlement);
   const features = resolveFeatureAccess(entitlement);
 
+  const curriculum = listCurriculum(true);
+  const itemBySkillId = new Map<string, { lesson: (typeof curriculum)[number]; item: (typeof curriculum)[number]['items'][number] }>();
+  for (const lesson of curriculum) {
+    for (const item of lesson.items) {
+      if (!itemBySkillId.has(item.skillId)) {
+        itemBySkillId.set(item.skillId, { lesson, item });
+      }
+    }
+  }
+
   const dueReviews = Object.values(user.skills)
     .filter((skill) => {
       if (!skill.nextReviewAt) {
@@ -133,7 +133,28 @@ function toDueReviews(user: UserProfile): { dueReviews: ReviewItem[]; entitlemen
       itemId: `${skill.skillId}-due`,
       skillId: skill.skillId,
       dueDate: String(skill.nextReviewAt)
-    }));
+    }))
+    .map((review) => {
+      const resolved = itemBySkillId.get(review.skillId);
+      if (!resolved) {
+        return review;
+      }
+
+      const locked = Boolean(resolved.lesson?.premium) && !features.advancedTracks;
+      if (locked) {
+        return { ...review, locked: true };
+      }
+
+      return {
+        ...review,
+        contentItemId: resolved.item.itemId,
+        prompt: resolved.item.prompt,
+        format: resolved.item.format,
+        choices: resolved.item.choices,
+        explanation: resolved.item.explanation,
+        locked: false
+      };
+    });
 
   const limitedReviews = typeof features.maxDueReviews === 'number'
     ? dueReviews.slice(0, features.maxDueReviews)
@@ -361,6 +382,65 @@ function gradeLessonAnswers(
   };
 }
 
+function gradeStandaloneAnswers(
+  user: UserProfile,
+  itemResults: Array<{ skillId: string; itemId?: string; answer?: string; isCorrect?: boolean }>
+): {
+  gradedItems?: Array<{ skillId: string; itemId?: string; answer?: string; isCorrect: boolean }>;
+  computedResults: Array<{ skillId: string; isCorrect: boolean }>;
+} {
+  const features = resolveFeatureAccess(normalizeEntitlement(user.entitlement));
+  const curriculum = listCurriculum(true);
+  const byItemId = new Map<string, { lesson: (typeof curriculum)[number]; item: (typeof curriculum)[number]['items'][number] }>();
+
+  for (const lesson of curriculum) {
+    for (const item of lesson.items) {
+      if (!byItemId.has(item.itemId)) {
+        byItemId.set(item.itemId, { lesson, item });
+      }
+    }
+  }
+
+  const gradedItems: Array<{ skillId: string; itemId?: string; answer?: string; isCorrect: boolean }> = [];
+  const computedResults: Array<{ skillId: string; isCorrect: boolean }> = [];
+
+  for (const result of itemResults) {
+    if (!result.answer) {
+      if (typeof result.isCorrect === 'boolean') {
+        computedResults.push({ skillId: result.skillId, isCorrect: result.isCorrect });
+      }
+      continue;
+    }
+
+    if (!result.itemId) {
+      throw new ApiError(400, 'Session itemResults.answer requires itemId');
+    }
+
+    const resolved = byItemId.get(result.itemId);
+    if (!resolved) {
+      throw new ApiError(400, 'Session itemResults contained unknown itemId');
+    }
+
+    if (resolved.lesson.premium && !features.advancedTracks) {
+      throw new ApiError(402, 'Pro subscription required for this content');
+    }
+
+    if (resolved.item.skillId !== result.skillId) {
+      throw new ApiError(400, 'Session itemResults itemId/skillId mismatch');
+    }
+
+    const acceptable = resolved.item.acceptableAnswers ?? [resolved.item.correctAnswer];
+    const isCorrect = isAnswerCorrect(result.answer, acceptable);
+    computedResults.push({ skillId: resolved.item.skillId, isCorrect });
+    gradedItems.push({ skillId: resolved.item.skillId, itemId: resolved.item.itemId, answer: result.answer, isCorrect });
+  }
+
+  return {
+    gradedItems: gradedItems.length > 0 ? gradedItems : undefined,
+    computedResults
+  };
+}
+
 function evaluateLessonCompletion(
   user: UserProfile,
   lessonId: string,
@@ -530,10 +610,17 @@ export function registerLearningRoutes(app: express.Express, deps: RouteDeps): v
           }));
         }
       } else {
-        computedResults = parsed.data.itemResults.map((item) => ({
-          skillId: item.skillId,
-          isCorrect: Boolean(item.isCorrect)
-        }));
+        const usesAnswers = parsed.data.itemResults.some((item) => typeof item.answer === 'string');
+        if (usesAnswers) {
+          const graded = gradeStandaloneAnswers(user, parsed.data.itemResults);
+          computedResults = graded.computedResults;
+          gradedItems = graded.gradedItems;
+        } else {
+          computedResults = parsed.data.itemResults.map((item) => ({
+            skillId: item.skillId,
+            isCorrect: Boolean(item.isCorrect)
+          }));
+        }
       }
 
       const scheduledReviews = computedResults.map((item) => applyItemResult(user, item.skillId, item.isCorrect));
