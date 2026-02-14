@@ -1,0 +1,15 @@
+# Example reverse proxy + TLS termination for staging/production.
+# Replace the hostnames and make sure your DNS points to this machine.
+
+api-staging.example.com {
+  encode gzip
+
+  # Forward all requests to the Node server.
+  reverse_proxy 127.0.0.1:3000
+
+  # Optional: basic hardening headers (helmet already adds most).
+  header {
+    -Server
+  }
+}
+

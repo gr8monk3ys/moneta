@@ -19,6 +19,27 @@ Requirements:
 - Forward `/health`, `/ready`, `/metrics`, and `/api/*` to the Node process
 - If using a reverse proxy, set `TRUST_PROXY=true` in the API environment
 
+Example Caddy config: `ops/caddy/Caddyfile.example`
+
+## 1a) Systemd service
+
+Deploys assume a systemd unit exists and can be restarted on deploy.
+
+Example unit file: `ops/systemd/moneta.service.example`
+
+Important:
+
+- Update `/srv/moneta` in the example to match your `DEPLOY_PATH`.
+- The deploy script restarts `DEPLOY_SERVICE_NAME` via `sudo systemctl restart ...`.
+- Ensure your `DEPLOY_USER` can run `systemctl restart` and `systemctl is-active` for that service without a password prompt.
+
+Example sudoers entry (adjust service name + systemctl path for your host):
+
+```bash
+# /etc/sudoers.d/moneta-deploy
+deploy-user ALL=NOPASSWD: /bin/systemctl restart moneta-staging, /bin/systemctl is-active moneta-staging
+```
+
 ## 2) Staging `.env` template (server-side)
 
 Put this at `<DEPLOY_PATH>/shared/.env` on the staging host (the deploy script symlinks it).
@@ -89,4 +110,3 @@ npx eas-cli build --profile preview --platform android
 - `curl https://api-staging.example.com/ready` returns `200`
 - `curl -H "Authorization: Bearer $METRICS_TOKEN" https://api-staging.example.com/metrics` returns `200`
 - EAS preview build launches and can register/login and start a lesson/reviews
-
