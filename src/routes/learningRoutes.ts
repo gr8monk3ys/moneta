@@ -14,15 +14,47 @@ const placementSchema = z.object({
   totalQuestions: z.number().int().min(1)
 });
 
+const sessionItemSchema = z.object({
+  skillId: z.string().min(1),
+  isCorrect: z.boolean().optional(),
+  itemId: z.string().min(1).optional(),
+  answer: z.string().min(1).optional()
+});
+
 const sessionSchema = z.object({
-  itemResults: z.array(
-    z.object({
-      skillId: z.string().min(1),
-      isCorrect: z.boolean()
-    })
-  ),
+  itemResults: z.array(sessionItemSchema),
   lessonId: z.string().min(1).optional(),
   timeZone: z.string().min(1).optional()
+}).superRefine((data, ctx) => {
+  if (!data.lessonId) {
+    const invalid = data.itemResults.find((item) => typeof item.isCorrect !== 'boolean');
+    if (invalid) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Session itemResults must include isCorrect when lessonId is not provided',
+        path: ['itemResults']
+      });
+    }
+    return;
+  }
+
+  const missingOutcome = data.itemResults.find((item) => typeof item.isCorrect !== 'boolean' && !item.answer);
+  if (missingOutcome) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Session itemResults must include isCorrect or answer when lessonId is provided',
+      path: ['itemResults']
+    });
+  }
+
+  const answerWithoutItemId = data.itemResults.find((item) => Boolean(item.answer) && !item.itemId);
+  if (answerWithoutItemId) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Session itemResults.answer requires itemId',
+      path: ['itemResults']
+    });
+  }
 });
 
 const paramsSchema = z.object({ userId: z.string().min(1) });
@@ -206,6 +238,129 @@ function syncMasteryCompletions(user: UserProfile, nowIso: string): void {
   }
 }
 
+function normalizeAnswer(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .replace(/[$,]/g, '')
+    .replace(/[^a-z0-9%.\s-]/g, '');
+}
+
+function parseNumericCandidate(value: string): { value: number; isPercent: boolean } | undefined {
+  const trimmed = value.trim();
+  const isPercent = trimmed.includes('%');
+  const cleaned = trimmed.replace(/%/g, '').trim();
+
+  if (!/^\d+(\.\d+)?$/.test(cleaned)) {
+    return undefined;
+  }
+
+  const parsed = Number.parseFloat(cleaned);
+  if (!Number.isFinite(parsed)) {
+    return undefined;
+  }
+
+  return { value: parsed, isPercent };
+}
+
+function numericEquivalent(
+  answer: { value: number; isPercent: boolean },
+  expected: { value: number; isPercent: boolean }
+): boolean {
+  let answerValue = answer.value;
+  let expectedValue = expected.value;
+
+  if (expected.isPercent && !answer.isPercent && answerValue <= 1) {
+    answerValue *= 100;
+  }
+
+  if (answer.isPercent && !expected.isPercent && expectedValue <= 1) {
+    expectedValue *= 100;
+  }
+
+  return Math.abs(answerValue - expectedValue) <= 0.01;
+}
+
+function isAnswerCorrect(answer: string, acceptableAnswers: string[]): boolean {
+  const normalizedAnswer = normalizeAnswer(answer);
+  if (!normalizedAnswer) {
+    return false;
+  }
+
+  const normalizedAcceptable = acceptableAnswers.map((entry) => normalizeAnswer(entry)).filter(Boolean);
+  if (normalizedAcceptable.includes(normalizedAnswer)) {
+    return true;
+  }
+
+  const parsedAnswer = parseNumericCandidate(normalizedAnswer);
+  if (!parsedAnswer) {
+    return false;
+  }
+
+  for (const acceptable of normalizedAcceptable) {
+    const parsedExpected = parseNumericCandidate(acceptable);
+    if (!parsedExpected) {
+      continue;
+    }
+
+    if (numericEquivalent(parsedAnswer, parsedExpected)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function gradeLessonAnswers(
+  lessonId: string,
+  itemResults: Array<{ skillId: string; itemId?: string; answer?: string; isCorrect?: boolean }>
+): {
+  gradedItems?: Array<{ skillId: string; itemId?: string; answer?: string; isCorrect: boolean }>;
+  computedResults: Array<{ skillId: string; isCorrect: boolean }>;
+} {
+  const lesson = getLessonById(lessonId);
+  if (!lesson) {
+    throw new ApiError(404, 'Lesson not found');
+  }
+
+  const byItemId = new Map(lesson.items.map((item) => [item.itemId, item] as const));
+  const gradedItems: Array<{ skillId: string; itemId?: string; answer?: string; isCorrect: boolean }> = [];
+  const computedResults: Array<{ skillId: string; isCorrect: boolean }> = [];
+
+  for (const result of itemResults) {
+    if (!result.answer) {
+      if (typeof result.isCorrect === 'boolean') {
+        computedResults.push({ skillId: result.skillId, isCorrect: result.isCorrect });
+      }
+      continue;
+    }
+
+    if (!result.itemId) {
+      throw new ApiError(400, 'Session itemResults.answer requires itemId');
+    }
+
+    const item = byItemId.get(result.itemId);
+    if (!item) {
+      throw new ApiError(400, 'Session itemResults contained unknown itemId');
+    }
+
+    if (item.skillId !== result.skillId) {
+      throw new ApiError(400, 'Session itemResults itemId/skillId mismatch');
+    }
+
+    const acceptable = item.acceptableAnswers ?? [item.correctAnswer];
+    const isCorrect = isAnswerCorrect(result.answer, acceptable);
+    computedResults.push({ skillId: item.skillId, isCorrect });
+    gradedItems.push({ skillId: item.skillId, itemId: item.itemId, answer: result.answer, isCorrect });
+  }
+
+  return {
+    gradedItems: gradedItems.length > 0 ? gradedItems : undefined,
+    computedResults
+  };
+}
+
 function evaluateLessonCompletion(
   user: UserProfile,
   lessonId: string,
@@ -356,18 +511,41 @@ export function registerLearningRoutes(app: express.Express, deps: RouteDeps): v
 
       const userId = String(req.auth?.sub ?? '');
       const user = await findUserOrThrow(deps, userId);
-      const scheduledReviews = parsed.data.itemResults.map((item) => applyItemResult(user, item.skillId, item.isCorrect));
       const nowIso = new Date().toISOString();
       syncMasteryCompletions(user, nowIso);
+
+      let computedResults: Array<{ skillId: string; isCorrect: boolean }> = [];
+      let gradedItems: Array<{ skillId: string; itemId?: string; answer?: string; isCorrect: boolean }> | undefined;
+
+      if (parsed.data.lessonId) {
+        const usesAnswers = parsed.data.itemResults.some((item) => typeof item.answer === 'string');
+        if (usesAnswers) {
+          const graded = gradeLessonAnswers(parsed.data.lessonId, parsed.data.itemResults);
+          computedResults = graded.computedResults;
+          gradedItems = graded.gradedItems;
+        } else {
+          computedResults = parsed.data.itemResults.map((item) => ({
+            skillId: item.skillId,
+            isCorrect: Boolean(item.isCorrect)
+          }));
+        }
+      } else {
+        computedResults = parsed.data.itemResults.map((item) => ({
+          skillId: item.skillId,
+          isCorrect: Boolean(item.isCorrect)
+        }));
+      }
+
+      const scheduledReviews = computedResults.map((item) => applyItemResult(user, item.skillId, item.isCorrect));
       const lessonProgress = parsed.data.lessonId
-        ? evaluateLessonCompletion(user, parsed.data.lessonId, parsed.data.itemResults, nowIso)
+        ? evaluateLessonCompletion(user, parsed.data.lessonId, computedResults, nowIso)
         : undefined;
       const streakDays = markSessionActivity(user, {
         timeZone: resolveTimeZone(parsed.data.timeZone, req.header('x-user-timezone'))
       });
       await deps.repository.upsertUserProfile(user);
 
-      res.status(200).json({ userId, streakDays, scheduledReviews, skills: user.skills, lessonProgress });
+      res.status(200).json({ userId, streakDays, scheduledReviews, skills: user.skills, lessonProgress, gradedItems });
     }).catch(next);
   });
 }

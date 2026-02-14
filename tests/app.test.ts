@@ -330,6 +330,48 @@ describe('Moneta API auth + learning flow', () => {
     expect(nextToday.body.nextLesson?.lessonId).not.toBe(initialLessonId);
   });
 
+  it('grades lesson answers server-side when provided', async () => {
+    const { app, accessToken } = await buildAuthedApp();
+
+    const lessonId = 'lesson-cash-flow-f1-001';
+    const lessonResponse = await request(app)
+      .get(`/api/learn/lessons/${lessonId}`)
+      .set('Authorization', `Bearer ${accessToken}`);
+
+    expect(lessonResponse.status).toBe(200);
+    expect(lessonResponse.body.lesson.lessonId).toBe(lessonId);
+
+    const answerKey: Record<string, string> = {
+      'apr-vs-apy': 'borrowing cost',
+      'basic-budgeting': '300'
+    };
+
+    const itemResults = lessonResponse.body.lesson.items.map((item: { itemId: string; skillId: string }) => ({
+      itemId: item.itemId,
+      skillId: item.skillId,
+      answer: answerKey[item.skillId]
+    }));
+
+    expect(itemResults.every((item: { answer?: string }) => Boolean(item.answer))).toBe(true);
+
+    const completion = await request(app)
+      .post('/api/sessions/complete')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        lessonId,
+        timeZone: 'UTC',
+        itemResults
+      });
+
+    expect(completion.status).toBe(200);
+    expect(completion.body.lessonProgress).toMatchObject({
+      lessonId,
+      completed: true
+    });
+    expect(completion.body.gradedItems).toHaveLength(itemResults.length);
+    expect(completion.body.gradedItems.every((item: { isCorrect: boolean }) => item.isCorrect)).toBe(true);
+  });
+
   it('returns only reviews that are due based on persisted schedule', async () => {
     const { app, repository } = buildApp();
 
