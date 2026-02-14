@@ -343,7 +343,11 @@ describe('Moneta API auth + learning flow', () => {
 
     const answerKey: Record<string, string> = {
       'apr-vs-apy': 'borrowing cost',
-      'basic-budgeting': '300'
+      'basic-budgeting': '300',
+      'fixed-vs-variable-expenses': 'fixed',
+      'net-cash-flow': '250',
+      'cash-flow-checkin-cadence': 'weekly',
+      'pay-yourself-first': 'save before discretionary spending'
     };
 
     const itemResults = lessonResponse.body.lesson.items.map((item: { itemId: string; skillId: string }) => ({
@@ -384,7 +388,11 @@ describe('Moneta API auth + learning flow', () => {
 
     const answerKey: Record<string, string> = {
       'apr-vs-apy': 'borrowing cost',
-      'basic-budgeting': '300'
+      'basic-budgeting': '300',
+      'fixed-vs-variable-expenses': 'fixed',
+      'net-cash-flow': '250',
+      'cash-flow-checkin-cadence': 'weekly',
+      'pay-yourself-first': 'save before discretionary spending'
     };
 
     const itemResults = lessonResponse.body.lesson.items.map((item: { itemId: string; skillId: string }) => ({
