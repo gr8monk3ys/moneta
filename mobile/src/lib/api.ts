@@ -1,5 +1,10 @@
 const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env;
-const baseUrl = env?.EXPO_PUBLIC_API_BASE_URL ?? 'http://localhost:3000';
+const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
+const baseUrl = env?.EXPO_PUBLIC_API_BASE_URL ?? (isDev ? 'http://localhost:3000' : '');
+
+if (!baseUrl) {
+  throw new Error('EXPO_PUBLIC_API_BASE_URL is required for non-dev builds.');
+}
 
 interface AuthPayload {
   email: string;
