@@ -13,6 +13,7 @@ import {
   type EntitlementResponse
 } from '../lib/api';
 import { queryKeys } from '../lib/queryKeys';
+import { openLegalDoc, type LegalDocKey } from '../lib/legal';
 import { disconnectStoreBilling, restoreLatestSubscription } from '../lib/storeBilling';
 import { theme } from '../lib/theme';
 
@@ -100,6 +101,18 @@ export function ProfileScreen(props: ProfileProps) {
     }
   }
 
+  async function handleOpenLegal(doc: LegalDocKey) {
+    try {
+      setMessage(null);
+      const result = await openLegalDoc(doc);
+      if (!result.opened) {
+        setMessage(result.error ?? 'Unable to open legal document.');
+      }
+    } catch (error) {
+      setMessage(formatError(error));
+    }
+  }
+
   async function exportAccountSnapshot() {
     try {
       setExporting(true);
@@ -151,6 +164,26 @@ export function ProfileScreen(props: ProfileProps) {
         </Pressable>
       ) : null}
 
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Legal</Text>
+        <Pressable style={styles.secondaryButton} onPress={() => handleOpenLegal('privacy')}>
+          <Text style={styles.secondaryText}>Privacy Policy</Text>
+        </Pressable>
+        <Pressable style={styles.secondaryButton} onPress={() => handleOpenLegal('terms')}>
+          <Text style={styles.secondaryText}>Terms of Service</Text>
+        </Pressable>
+        <Pressable style={styles.secondaryButton} onPress={() => handleOpenLegal('subscription')}>
+          <Text style={styles.secondaryText}>Subscription Terms</Text>
+        </Pressable>
+        <Pressable style={styles.secondaryButton} onPress={() => handleOpenLegal('disclaimer')}>
+          <Text style={styles.secondaryText}>Financial Education Disclaimer</Text>
+        </Pressable>
+        <Pressable style={styles.secondaryButton} onPress={() => handleOpenLegal('deletion')}>
+          <Text style={styles.secondaryText}>Account Deletion Policy</Text>
+        </Pressable>
+        <Text style={styles.disclaimer}>Educational only. Not financial advice.</Text>
+      </View>
+
       <Pressable style={styles.button} onPress={signOutCurrentSession}>
         <Text style={styles.buttonText}>Sign out this device</Text>
       </Pressable>
@@ -177,11 +210,14 @@ const styles = StyleSheet.create({
   name: { color: theme.textPrimary, fontSize: 20, fontWeight: '700' },
   description: { color: theme.textMuted },
   plan: { color: theme.accent, fontWeight: '600' },
+  section: { gap: 10, paddingTop: 6 },
+  sectionTitle: { color: theme.textPrimary, fontWeight: '700' },
   button: { backgroundColor: theme.card, borderColor: '#2f3440', borderWidth: 1, borderRadius: 12, padding: 12 },
   buttonText: { color: theme.textPrimary, textAlign: 'center', fontWeight: '700' },
   secondaryButton: { borderColor: theme.accent, borderWidth: 1, borderRadius: 12, padding: 12 },
   secondaryText: { color: theme.accent, textAlign: 'center', fontWeight: '700' },
   dangerButton: { borderColor: theme.danger, borderWidth: 1, borderRadius: 12, padding: 12 },
   dangerText: { color: theme.danger, textAlign: 'center', fontWeight: '700' },
-  message: { color: theme.danger }
+  message: { color: theme.danger },
+  disclaimer: { color: theme.textMuted, textAlign: 'center', fontSize: 12 }
 });

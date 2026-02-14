@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { login, register } from '../lib/api';
+import { openLegalDoc, type LegalDocKey } from '../lib/legal';
 import { theme } from '../lib/theme';
 
 interface AuthResult {
@@ -52,6 +53,13 @@ export function LoginScreen(props: { onAuthenticated: (auth: AuthResult) => void
     }
   }
 
+  async function handleOpenLegal(doc: LegalDocKey) {
+    const result = await openLegalDoc(doc);
+    if (!result.opened && result.error) {
+      setError(result.error);
+    }
+  }
+
   return (
     <View style={styles.container}>
       <Text style={styles.logo}>💰 Moneta</Text>
@@ -70,6 +78,17 @@ export function LoginScreen(props: { onAuthenticated: (auth: AuthResult) => void
       <Pressable style={styles.secondaryButton} onPress={quickCreateDemo} disabled={loading}>
         <Text style={styles.secondaryText}>Create Demo User</Text>
       </Pressable>
+
+      <View style={styles.legalRow}>
+        <Pressable onPress={() => handleOpenLegal('privacy')}>
+          <Text style={styles.legalLink}>Privacy Policy</Text>
+        </Pressable>
+        <Text style={styles.legalDivider}>•</Text>
+        <Pressable onPress={() => handleOpenLegal('terms')}>
+          <Text style={styles.legalLink}>Terms</Text>
+        </Pressable>
+      </View>
+      <Text style={styles.disclaimer}>Educational only. Not financial advice.</Text>
     </View>
   );
 }
@@ -91,5 +110,9 @@ const styles = StyleSheet.create({
   primaryButton: { backgroundColor: theme.accent, borderRadius: 12, padding: 14, marginTop: 8 },
   primaryText: { textAlign: 'center', color: '#1a1d24', fontWeight: '700' },
   secondaryButton: { borderRadius: 12, padding: 14, borderWidth: 1, borderColor: '#2f3440' },
-  secondaryText: { textAlign: 'center', color: theme.textPrimary, fontWeight: '600' }
+  secondaryText: { textAlign: 'center', color: theme.textPrimary, fontWeight: '600' },
+  legalRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 6 },
+  legalLink: { color: theme.textMuted, textDecorationLine: 'underline' },
+  legalDivider: { color: theme.textMuted },
+  disclaimer: { color: theme.textMuted, textAlign: 'center', fontSize: 12 }
 });
