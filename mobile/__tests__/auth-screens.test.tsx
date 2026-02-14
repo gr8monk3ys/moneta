@@ -224,7 +224,7 @@ describe('mobile auth-driven screens', () => {
     const onTokensUpdated = jest.fn();
     const auth = { accessToken: 'a', refreshToken: 'r', onTokensUpdated };
 
-    const screen = render(<HomeScreen userId="u1" auth={auth} />);
+    const screen = render(<HomeScreen userId="u1" auth={auth} onOpenLesson={jest.fn()} />);
 
     await waitFor(() => {
       expect(screen.getByText('Next: Next Up')).toBeTruthy();
@@ -258,7 +258,7 @@ describe('mobile auth-driven screens', () => {
     (api.refresh as jest.Mock).mockRejectedValue(new Error('refresh failed'));
 
     const auth = { accessToken: 'a', refreshToken: 'r', onTokensUpdated: jest.fn() };
-    const screen = render(<HomeScreen userId="u1" auth={auth} />);
+    const screen = render(<HomeScreen userId="u1" auth={auth} onOpenLesson={jest.fn()} />);
 
     await waitFor(() => {
       expect(screen.getByText('dashboard failed')).toBeTruthy();
@@ -291,7 +291,7 @@ describe('mobile auth-driven screens', () => {
       }
     });
 
-    const screen = render(<LearnScreen userId="u1" auth={auth} />);
+    const screen = render(<LearnScreen userId="u1" auth={auth} onOpenLesson={jest.fn()} />);
 
     await waitFor(() => {
       expect(screen.getByText('Up next: Next Up')).toBeTruthy();

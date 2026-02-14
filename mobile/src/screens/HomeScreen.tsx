@@ -6,6 +6,8 @@ import { theme } from '../lib/theme';
 interface HomeProps {
   userId: string;
   auth: AuthContext;
+  onOpenLesson: (lessonId: string) => void;
+  refreshNonce?: number;
 }
 
 interface DashboardState {
@@ -60,7 +62,25 @@ export function HomeScreen(props: HomeProps) {
 
   useEffect(() => {
     loadDashboard().catch(() => undefined);
-  }, [loadDashboard]);
+  }, [loadDashboard, props.refreshNonce]);
+
+  async function handleStartNextLesson() {
+    setStatus(null);
+    setLoading(true);
+
+    try {
+      if (!dashboard.nextLessonId) {
+        setStatus('No lesson available to start.');
+        return;
+      }
+
+      props.onOpenLesson(dashboard.nextLessonId);
+    } catch (error) {
+      setStatus(formatError(error));
+    } finally {
+      setLoading(false);
+    }
+  }
 
   async function handlePlacement() {
     setLoading(true);
@@ -177,6 +197,9 @@ export function HomeScreen(props: HomeProps) {
       <View style={styles.actions}>
         <Pressable style={styles.button} onPress={handlePlacement} disabled={loading}>
           <Text style={styles.buttonText}>Run Placement</Text>
+        </Pressable>
+        <Pressable style={styles.button} onPress={handleStartNextLesson} disabled={loading || !dashboard.nextLessonId}>
+          <Text style={styles.buttonText}>Start Next Lesson</Text>
         </Pressable>
         <Pressable style={styles.button} onPress={handlePractice} disabled={loading}>
           <Text style={styles.buttonText}>Submit Practice Session</Text>

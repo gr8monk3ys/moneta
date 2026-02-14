@@ -114,7 +114,7 @@ describe('mobile presentational components', () => {
   });
 
   it('renders learn and progress screens', async () => {
-    const learn = render(<LearnScreen userId="u1" auth={auth} />);
+    const learn = render(<LearnScreen userId="u1" auth={auth} onOpenLesson={jest.fn()} />);
     expect(learn.getByText('Learning Path')).toBeTruthy();
 
     await waitFor(() => {

@@ -3,11 +3,12 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 import { fetchLearningPath, fetchToday, syncEntitlement, type AuthContext, type PathLesson } from '../lib/api';
 import { disconnectStoreBilling, listSubscriptionProducts, purchasePrimarySubscription } from '../lib/storeBilling';
 import { theme } from '../lib/theme';
-import { LessonPlayerScreen } from './LessonPlayerScreen';
 
 interface LearnScreenProps {
   userId: string;
   auth: AuthContext;
+  onOpenLesson: (lessonId: string) => void;
+  refreshNonce?: number;
 }
 
 function formatError(error: unknown): string {
@@ -23,7 +24,6 @@ export function LearnScreen(props: LearnScreenProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
-  const [activeLessonId, setActiveLessonId] = useState<string | null>(null);
 
   const loadToday = useCallback(async () => {
     setLoading(true);
@@ -61,23 +61,7 @@ export function LearnScreen(props: LearnScreenProps) {
     return () => {
       disconnectStoreBilling().catch(() => undefined);
     };
-  }, [loadCatalog, loadToday]);
-
-  if (activeLessonId) {
-    return (
-      <LessonPlayerScreen
-        userId={props.userId}
-        lessonId={activeLessonId}
-        auth={props.auth}
-        onExit={(updated) => {
-          setActiveLessonId(null);
-          if (updated) {
-            loadToday().catch(() => undefined);
-          }
-        }}
-      />
-    );
-  }
+  }, [loadCatalog, loadToday, props.refreshNonce]);
 
   async function upgradeToPro() {
     setStatus(null);
@@ -136,7 +120,7 @@ export function LearnScreen(props: LearnScreenProps) {
                 setError('Upgrade to Pro to access this lesson.');
                 return;
               }
-              setActiveLessonId(lesson.lessonId);
+              props.onOpenLesson(lesson.lessonId);
             }}
           >
             <Text style={[styles.nodeText, index === 0 && styles.activeNodeText, locked && styles.lockedNodeText]}>

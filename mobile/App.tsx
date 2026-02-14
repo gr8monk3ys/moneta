@@ -8,6 +8,7 @@ import { type AuthContext } from './src/lib/api';
 import { theme } from './src/lib/theme';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { LearnScreen } from './src/screens/LearnScreen';
+import { LessonPlayerScreen } from './src/screens/LessonPlayerScreen';
 import { LoginScreen } from './src/screens/LoginScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
 import { ProgressScreen } from './src/screens/ProgressScreen';
@@ -20,16 +21,58 @@ interface MainTabsProps {
 
 function MainTabs(props: MainTabsProps) {
   const [tab, setTab] = useState<TabKey>('home');
+  const [activeLessonId, setActiveLessonId] = useState<string | null>(null);
+  const [lessonReturnTab, setLessonReturnTab] = useState<TabKey | null>(null);
+  const [refreshNonce, setRefreshNonce] = useState(0);
+
+  function openLesson(lessonId: string) {
+    setLessonReturnTab(tab);
+    setActiveLessonId(lessonId);
+  }
 
   return (
     <View style={styles.page}>
       <View style={styles.content}>
-        {tab === 'home' && <HomeScreen userId={props.userId} auth={props.authContext} />}
-        {tab === 'learn' && <LearnScreen userId={props.userId} auth={props.authContext} />}
-        {tab === 'progress' && <ProgressScreen userId={props.userId} auth={props.authContext} />}
-        {tab === 'profile' && <ProfileScreen userId={props.userId} auth={props.authContext} onLogout={props.onLogout} />}
+        {activeLessonId ? (
+          <LessonPlayerScreen
+            userId={props.userId}
+            lessonId={activeLessonId}
+            auth={props.authContext}
+            onExit={(updated) => {
+              setActiveLessonId(null);
+              setTab(lessonReturnTab ?? tab);
+              setLessonReturnTab(null);
+              if (updated) {
+                setRefreshNonce((prev) => prev + 1);
+              }
+            }}
+          />
+        ) : null}
+
+        {!activeLessonId ? (
+          <>
+            {tab === 'home' && (
+              <HomeScreen
+                userId={props.userId}
+                auth={props.authContext}
+                refreshNonce={refreshNonce}
+                onOpenLesson={openLesson}
+              />
+            )}
+            {tab === 'learn' && (
+              <LearnScreen
+                userId={props.userId}
+                auth={props.authContext}
+                refreshNonce={refreshNonce}
+                onOpenLesson={openLesson}
+              />
+            )}
+            {tab === 'progress' && <ProgressScreen userId={props.userId} auth={props.authContext} />}
+            {tab === 'profile' && <ProfileScreen userId={props.userId} auth={props.authContext} onLogout={props.onLogout} />}
+          </>
+        ) : null}
       </View>
-      <BottomNav value={tab} onChange={setTab} />
+      {!activeLessonId ? <BottomNav value={tab} onChange={setTab} /> : null}
     </View>
   );
 }
