@@ -12,6 +12,7 @@ import { LessonPlayerScreen } from './src/screens/LessonPlayerScreen';
 import { LoginScreen } from './src/screens/LoginScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
 import { ProgressScreen } from './src/screens/ProgressScreen';
+import { ReviewPlayerScreen } from './src/screens/ReviewPlayerScreen';
 
 interface MainTabsProps {
   userId: string;
@@ -23,11 +24,18 @@ function MainTabs(props: MainTabsProps) {
   const [tab, setTab] = useState<TabKey>('home');
   const [activeLessonId, setActiveLessonId] = useState<string | null>(null);
   const [lessonReturnTab, setLessonReturnTab] = useState<TabKey | null>(null);
+  const [activeReview, setActiveReview] = useState(false);
+  const [reviewReturnTab, setReviewReturnTab] = useState<TabKey | null>(null);
   const [refreshNonce, setRefreshNonce] = useState(0);
 
   function openLesson(lessonId: string) {
     setLessonReturnTab(tab);
     setActiveLessonId(lessonId);
+  }
+
+  function openReviews() {
+    setReviewReturnTab(tab);
+    setActiveReview(true);
   }
 
   return (
@@ -49,7 +57,22 @@ function MainTabs(props: MainTabsProps) {
           />
         ) : null}
 
-        {!activeLessonId ? (
+        {activeReview ? (
+          <ReviewPlayerScreen
+            userId={props.userId}
+            auth={props.authContext}
+            onExit={(updated) => {
+              setActiveReview(false);
+              setTab(reviewReturnTab ?? tab);
+              setReviewReturnTab(null);
+              if (updated) {
+                setRefreshNonce((prev) => prev + 1);
+              }
+            }}
+          />
+        ) : null}
+
+        {!activeLessonId && !activeReview ? (
           <>
             {tab === 'home' && (
               <HomeScreen
@@ -57,6 +80,7 @@ function MainTabs(props: MainTabsProps) {
                 auth={props.authContext}
                 refreshNonce={refreshNonce}
                 onOpenLesson={openLesson}
+                onStartReviews={openReviews}
               />
             )}
             {tab === 'learn' && (
@@ -72,7 +96,7 @@ function MainTabs(props: MainTabsProps) {
           </>
         ) : null}
       </View>
-      {!activeLessonId ? <BottomNav value={tab} onChange={setTab} /> : null}
+      {!activeLessonId && !activeReview ? <BottomNav value={tab} onChange={setTab} /> : null}
     </View>
   );
 }

@@ -7,6 +7,7 @@ interface HomeProps {
   userId: string;
   auth: AuthContext;
   onOpenLesson: (lessonId: string) => void;
+  onStartReviews: () => void;
   refreshNonce?: number;
 }
 
@@ -75,6 +76,24 @@ export function HomeScreen(props: HomeProps) {
       }
 
       props.onOpenLesson(dashboard.nextLessonId);
+    } catch (error) {
+      setStatus(formatError(error));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleStartReviews() {
+    setStatus(null);
+    setLoading(true);
+
+    try {
+      if (dashboard.reviews.length === 0) {
+        setStatus('No reviews due.');
+        return;
+      }
+
+      props.onStartReviews();
     } catch (error) {
       setStatus(formatError(error));
     } finally {
@@ -197,6 +216,9 @@ export function HomeScreen(props: HomeProps) {
       <View style={styles.actions}>
         <Pressable style={styles.button} onPress={handlePlacement} disabled={loading}>
           <Text style={styles.buttonText}>Run Placement</Text>
+        </Pressable>
+        <Pressable style={styles.button} onPress={handleStartReviews} disabled={loading || dashboard.reviews.length === 0}>
+          <Text style={styles.buttonText}>Start Reviews</Text>
         </Pressable>
         <Pressable style={styles.button} onPress={handleStartNextLesson} disabled={loading || !dashboard.nextLessonId}>
           <Text style={styles.buttonText}>Start Next Lesson</Text>
