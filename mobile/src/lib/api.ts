@@ -105,10 +105,15 @@ interface PlacementResponse {
   level: string;
 }
 
+export type SessionItemResult =
+  | { skillId: string; isCorrect: boolean }
+  | { skillId: string; itemId: string; answer: string };
+
 interface SessionResponse {
   userId: string;
   streakDays: number;
   scheduledReviews: Array<{ itemId: string; skillId: string; dueDate: string }>;
+  gradedItems?: Array<{ skillId: string; itemId?: string; answer?: string; isCorrect: boolean }>;
   lessonProgress?: {
     lessonId: string;
     completed: boolean;
@@ -335,7 +340,7 @@ export async function submitPlacement(auth: AuthContext, score: { correctAnswers
 
 export async function completeSession(
   auth: AuthContext,
-  itemResults: Array<{ skillId: string; isCorrect: boolean }>,
+  itemResults: SessionItemResult[],
   options: { lessonId?: string; timeZone?: string } = {}
 ): Promise<SessionResponse> {
   return withAuthRetry(auth, (token) => postJson<SessionResponse>(
