@@ -20,8 +20,25 @@ export interface AuthenticatedRequest extends Request {
   auth?: JwtClaims;
 }
 
+function resolveBcryptRounds(): number {
+  const fallback = 10;
+  const configured = process.env.BCRYPT_SALT_ROUNDS;
+  const parsed = configured ? Number(configured) : Number.NaN;
+  const rounds = Number.isFinite(parsed) ? Math.floor(parsed) : fallback;
+
+  if (process.env.NODE_ENV === 'production' && rounds < fallback) {
+    throw new Error(`BCRYPT_SALT_ROUNDS must be >= ${fallback} in production`);
+  }
+
+  if (rounds < 4) {
+    return 4;
+  }
+
+  return rounds;
+}
+
 export function hashPassword(password: string): Promise<string> {
-  return bcrypt.hash(password, 10);
+  return bcrypt.hash(password, resolveBcryptRounds());
 }
 
 export function comparePassword(password: string, hash: string): Promise<boolean> {
