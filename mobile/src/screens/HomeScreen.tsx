@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { completeSession, fetchLessonDetails, fetchProgress, fetchToday, refresh, submitPlacement, type AuthContext } from '../lib/api';
+import { queryKeys } from '../lib/queryKeys';
 import { theme } from '../lib/theme';
 
 const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
@@ -10,18 +12,6 @@ interface HomeProps {
   auth: AuthContext;
   onOpenLesson: (lessonId: string) => void;
   onStartReviews: () => void;
-  refreshNonce?: number;
-}
-
-interface DashboardState {
-  progress: string;
-  reviews: string[];
-  practiceReviews: string[];
-  streak: string;
-  nextLesson: string;
-  nextLessonId?: string;
-  planBadge: string;
-  dueLimitNote: string | null;
 }
 
 function formatError(error: unknown): string {
@@ -29,58 +19,44 @@ function formatError(error: unknown): string {
 }
 
 export function HomeScreen(props: HomeProps) {
-  const [dashboard, setDashboard] = useState<DashboardState>({
-    progress: 'Loading progress…',
-    reviews: [],
-    practiceReviews: [],
-    streak: '—',
-    nextLesson: 'Loading lesson…',
-    nextLessonId: undefined,
-    planBadge: 'Free',
-    dueLimitNote: null
-  });
+  const queryClient = useQueryClient();
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
 
-  const loadDashboard = useCallback(async () => {
-    try {
-      const [progress, today] = await Promise.all([
-        fetchProgress(props.userId, props.auth),
-        fetchToday(props.userId, props.auth)
-      ]);
+  const progressQuery = useQuery({
+    queryKey: queryKeys.progress(props.userId),
+    queryFn: () => fetchProgress(props.userId, props.auth)
+  });
 
-      setDashboard({
-        progress: `Level ${progress.currentLevel} • ${progress.masteredSkills}/${progress.totalSkills} mastered`,
-        reviews: today.dueReviews.map((item) => item.skillId),
-        practiceReviews: (today.practiceReviews ?? []).map((item) => item.skillId),
-        streak: `${progress.streakDays}`,
-        nextLesson: today.nextLesson?.title ?? 'No lesson available',
-        nextLessonId: today.nextLesson?.lessonId,
-        planBadge: progress.plan === 'pro' && progress.premiumActive ? 'Pro' : 'Free',
-        dueLimitNote: typeof today.features.maxDueReviews === 'number'
-          ? `Free plan shows up to ${today.features.maxDueReviews} due reviews/day.`
-          : null
-      });
-    } catch (error) {
-      setStatus(formatError(error));
-    }
-  }, [props.auth, props.userId]);
+  const todayQuery = useQuery({
+    queryKey: queryKeys.today(props.userId),
+    queryFn: () => fetchToday(props.userId, props.auth)
+  });
 
-  useEffect(() => {
-    loadDashboard().catch(() => undefined);
-  }, [loadDashboard, props.refreshNonce]);
+  const progress = progressQuery.data;
+  const today = todayQuery.data;
+
+  const nextLessonId = today?.nextLesson?.lessonId;
+  const dueReviews = today?.dueReviews ?? [];
+  const practiceReviews = today?.practiceReviews ?? [];
+  const planBadge = progress?.plan === 'pro' && progress.premiumActive ? 'Pro' : 'Free';
+  const dueLimitNote = today && typeof today.features.maxDueReviews === 'number'
+    ? `Free plan shows up to ${today.features.maxDueReviews} due reviews/day.`
+    : null;
+  const initialLoad = progressQuery.isPending || todayQuery.isPending;
+  const loadError = progressQuery.error ?? todayQuery.error;
 
   async function handleStartNextLesson() {
     setStatus(null);
     setLoading(true);
 
     try {
-      if (!dashboard.nextLessonId) {
+      if (!nextLessonId) {
         setStatus('No lesson available to start.');
         return;
       }
 
-      props.onOpenLesson(dashboard.nextLessonId);
+      props.onOpenLesson(nextLessonId);
     } catch (error) {
       setStatus(formatError(error));
     } finally {
@@ -93,6 +69,11 @@ export function HomeScreen(props: HomeProps) {
     setLoading(true);
 
     try {
+      if (dueReviews.length === 0 && practiceReviews.length === 0) {
+        setStatus('No reviews available yet. Complete a lesson to generate reviews.');
+        return;
+      }
+
       props.onStartReviews();
     } catch (error) {
       setStatus(formatError(error));
@@ -108,7 +89,11 @@ export function HomeScreen(props: HomeProps) {
     try {
       const placement = await submitPlacement(props.auth, { correctAnswers: 7, totalQuestions: 10 });
       setStatus(`Placed at ${placement.level}`);
-      await loadDashboard();
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.progress(props.userId) }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.today(props.userId) }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.learningPath(props.userId) })
+      ]);
     } catch (error) {
       setStatus(formatError(error));
     } finally {
@@ -126,7 +111,11 @@ export function HomeScreen(props: HomeProps) {
         { skillId: 'basic-budgeting', isCorrect: true }
       ]);
       setStatus(`Session complete • streak ${session.streakDays}`);
-      await loadDashboard();
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.progress(props.userId) }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.today(props.userId) }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.learningPath(props.userId) })
+      ]);
     } catch (error) {
       setStatus(formatError(error));
     } finally {
@@ -139,12 +128,12 @@ export function HomeScreen(props: HomeProps) {
     setStatus(null);
 
     try {
-      if (!dashboard.nextLessonId) {
+      if (!nextLessonId) {
         setStatus('No lesson available to complete.');
         return;
       }
 
-      const lesson = await fetchLessonDetails(dashboard.nextLessonId, props.auth);
+      const lesson = await fetchLessonDetails(nextLessonId, props.auth);
       const targetCoverage = Math.max(1, Math.ceil(lesson.lesson.items.length * 0.75));
       const simulatedResults = lesson.lesson.items.slice(0, targetCoverage).map((item, index) => ({
         skillId: item.skillId,
@@ -162,7 +151,11 @@ export function HomeScreen(props: HomeProps) {
         setStatus(`Lesson attempt recorded (${lesson.lesson.title}). Keep practicing to complete.`);
       }
 
-      await loadDashboard();
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.progress(props.userId) }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.today(props.userId) }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.learningPath(props.userId) })
+      ]);
     } catch (error) {
       setStatus(formatError(error));
     } finally {
@@ -193,41 +186,47 @@ export function HomeScreen(props: HomeProps) {
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.hero}>
         <Text style={styles.heroTitle}>Daily Goal: 10 min</Text>
-        <Text style={styles.planBadge}>Plan: {dashboard.planBadge}</Text>
-        <Text style={styles.heroSubtitle}>{dashboard.progress}</Text>
-        <Text style={styles.heroSubtitle}>Next: {dashboard.nextLesson}</Text>
+        <Text style={styles.planBadge}>Plan: {planBadge}</Text>
+        <Text style={styles.heroSubtitle}>
+          {progress
+            ? `Level ${progress.currentLevel} • ${progress.masteredSkills}/${progress.totalSkills} mastered`
+            : 'Loading progress…'}
+        </Text>
+        <Text style={styles.heroSubtitle}>
+          Next: {today?.nextLesson?.title ?? (today ? 'No lesson available' : 'Loading lesson…')}
+        </Text>
       </View>
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Today’s Reviews</Text>
-        {dashboard.reviews.length > 0 ? (
-          dashboard.reviews.map((review) => <Text key={review} style={styles.cardLine}>• {review}</Text>)
-        ) : dashboard.practiceReviews.length > 0 ? (
+        {dueReviews.length > 0 ? (
+          dueReviews.map((review) => <Text key={review.itemId} style={styles.cardLine}>• {review.skillId}</Text>)
+        ) : practiceReviews.length > 0 ? (
           <>
             <Text style={styles.cardLine}>No reviews due yet.</Text>
             <Text style={styles.cardLine}>Practice set available:</Text>
-            {dashboard.practiceReviews.map((review) => <Text key={review} style={styles.cardLine}>• {review}</Text>)}
+            {practiceReviews.map((review) => <Text key={review.itemId} style={styles.cardLine}>• {review.skillId}</Text>)}
           </>
         ) : (
           <Text style={styles.cardLine}>Complete a lesson to generate reviews.</Text>
         )}
-        {dashboard.dueLimitNote ? <Text style={styles.limitNote}>{dashboard.dueLimitNote}</Text> : null}
+        {dueLimitNote ? <Text style={styles.limitNote}>{dueLimitNote}</Text> : null}
       </View>
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Streak</Text>
-        <Text style={styles.streak}>🔥 {dashboard.streak} days</Text>
+        <Text style={styles.streak}>🔥 {progress ? String(progress.streakDays) : '—'} days</Text>
       </View>
 
       <View style={styles.actions}>
         <Pressable
           style={styles.button}
           onPress={handleStartReviews}
-          disabled={loading || (dashboard.reviews.length === 0 && dashboard.practiceReviews.length === 0)}
+          disabled={loading || (dueReviews.length === 0 && practiceReviews.length === 0)}
         >
           <Text style={styles.buttonText}>Start Reviews</Text>
         </Pressable>
-        <Pressable style={styles.button} onPress={handleStartNextLesson} disabled={loading || !dashboard.nextLessonId}>
+        <Pressable style={styles.button} onPress={handleStartNextLesson} disabled={loading || !nextLessonId}>
           <Text style={styles.buttonText}>Start Next Lesson</Text>
         </Pressable>
         {isDev ? (
@@ -248,7 +247,8 @@ export function HomeScreen(props: HomeProps) {
         ) : null}
       </View>
 
-      {loading ? <ActivityIndicator color={theme.accent} /> : null}
+      {initialLoad || loading ? <ActivityIndicator color={theme.accent} /> : null}
+      {!status && loadError ? <Text style={styles.status}>{formatError(loadError)}</Text> : null}
       {status ? <Text style={styles.status}>{status}</Text> : null}
     </ScrollView>
   );

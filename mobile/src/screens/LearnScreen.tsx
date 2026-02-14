@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchLearningPath, fetchToday, syncEntitlement, type AuthContext, type PathLesson } from '../lib/api';
+import { queryKeys } from '../lib/queryKeys';
 import { disconnectStoreBilling, listSubscriptionProducts, purchasePrimarySubscription } from '../lib/storeBilling';
 import { theme } from '../lib/theme';
 
@@ -8,7 +10,6 @@ interface LearnScreenProps {
   userId: string;
   auth: AuthContext;
   onOpenLesson: (lessonId: string) => void;
-  refreshNonce?: number;
 }
 
 function formatError(error: unknown): string {
@@ -16,34 +17,20 @@ function formatError(error: unknown): string {
 }
 
 export function LearnScreen(props: LearnScreenProps) {
-  const [nextLesson, setNextLesson] = useState<string | null>(null);
-  const [advancedTracksUnlocked, setAdvancedTracksUnlocked] = useState(false);
-  const [planLabel, setPlanLabel] = useState('Free');
+  const queryClient = useQueryClient();
   const [priceLabel, setPriceLabel] = useState<string | null>(null);
-  const [lessons, setLessons] = useState<PathLesson[]>([]);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
 
-  const loadToday = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  const todayQuery = useQuery({
+    queryKey: queryKeys.today(props.userId),
+    queryFn: () => fetchToday(props.userId, props.auth)
+  });
 
-    try {
-      const [today, path] = await Promise.all([
-        fetchToday(props.userId, props.auth),
-        fetchLearningPath(props.userId, props.auth)
-      ]);
-      setNextLesson(today.nextLesson?.title ?? null);
-      setAdvancedTracksUnlocked(today.features.advancedTracks);
-      setPlanLabel(today.entitlement.plan === 'pro' ? 'Pro' : 'Free');
-      setLessons(path.lessons);
-    } catch (reason) {
-      setError(formatError(reason));
-    } finally {
-      setLoading(false);
-    }
-  }, [props.auth, props.userId]);
+  const pathQuery = useQuery({
+    queryKey: queryKeys.learningPath(props.userId),
+    queryFn: () => fetchLearningPath(props.userId, props.auth)
+  });
 
   const loadCatalog = useCallback(async () => {
     try {
@@ -55,18 +42,16 @@ export function LearnScreen(props: LearnScreenProps) {
   }, []);
 
   useEffect(() => {
-    loadToday().catch(() => undefined);
     loadCatalog().catch(() => undefined);
 
     return () => {
       disconnectStoreBilling().catch(() => undefined);
     };
-  }, [loadCatalog, loadToday, props.refreshNonce]);
+  }, [loadCatalog]);
 
   async function upgradeToPro() {
     setStatus(null);
     setError(null);
-    setLoading(true);
 
     try {
       const purchase = await purchasePrimarySubscription(props.userId);
@@ -76,13 +61,22 @@ export function LearnScreen(props: LearnScreenProps) {
         purchaseToken: purchase.purchaseToken
       });
       setStatus(purchase.sandbox ? 'Moneta Pro unlocked in sandbox mode.' : 'Moneta Pro unlocked.');
-      await loadToday();
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.today(props.userId) }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.learningPath(props.userId) })
+      ]);
     } catch (reason) {
       setError(formatError(reason));
-    } finally {
-      setLoading(false);
     }
   }
+
+  const today = todayQuery.data;
+  const path = pathQuery.data;
+  const lessons: PathLesson[] = path?.lessons ?? [];
+  const nextLesson = today?.nextLesson?.title ?? null;
+  const advancedTracksUnlocked = Boolean(today?.features?.advancedTracks);
+  const planLabel = today?.entitlement?.plan === 'pro' ? 'Pro' : 'Free';
+  const loading = todayQuery.isPending || pathQuery.isPending;
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>

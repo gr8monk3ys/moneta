@@ -5,6 +5,7 @@ import { LoginScreen } from '../src/screens/LoginScreen';
 import { ProfileScreen } from '../src/screens/ProfileScreen';
 import * as api from '../src/lib/api';
 import * as storeBilling from '../src/lib/storeBilling';
+import { renderWithQueryClient } from './testUtils';
 
 jest.mock('../src/lib/api', () => ({
   ...jest.requireActual('../src/lib/api'),
@@ -224,7 +225,9 @@ describe('mobile auth-driven screens', () => {
     const onTokensUpdated = jest.fn();
     const auth = { accessToken: 'a', refreshToken: 'r', onTokensUpdated };
 
-    const screen = render(<HomeScreen userId="u1" auth={auth} onOpenLesson={jest.fn()} onStartReviews={jest.fn()} />);
+    const screen = renderWithQueryClient(
+      <HomeScreen userId="u1" auth={auth} onOpenLesson={jest.fn()} onStartReviews={jest.fn()} />
+    );
 
     await waitFor(() => {
       expect(screen.getByText('Next: Next Up')).toBeTruthy();
@@ -258,7 +261,9 @@ describe('mobile auth-driven screens', () => {
     (api.refresh as jest.Mock).mockRejectedValue(new Error('refresh failed'));
 
     const auth = { accessToken: 'a', refreshToken: 'r', onTokensUpdated: jest.fn() };
-    const screen = render(<HomeScreen userId="u1" auth={auth} onOpenLesson={jest.fn()} onStartReviews={jest.fn()} />);
+    const screen = renderWithQueryClient(
+      <HomeScreen userId="u1" auth={auth} onOpenLesson={jest.fn()} onStartReviews={jest.fn()} />
+    );
 
     await waitFor(() => {
       expect(screen.getByText('dashboard failed')).toBeTruthy();
@@ -291,7 +296,7 @@ describe('mobile auth-driven screens', () => {
       }
     });
 
-    const screen = render(<LearnScreen userId="u1" auth={auth} onOpenLesson={jest.fn()} />);
+    const screen = renderWithQueryClient(<LearnScreen userId="u1" auth={auth} onOpenLesson={jest.fn()} />);
 
     await waitFor(() => {
       expect(screen.getByText('Up next: Next Up')).toBeTruthy();
@@ -330,7 +335,7 @@ describe('mobile auth-driven screens', () => {
       }
     });
 
-    const screen = render(<ProfileScreen onLogout={onLogout} userId="u1" auth={auth} />);
+    const screen = renderWithQueryClient(<ProfileScreen onLogout={onLogout} userId="u1" auth={auth} />);
 
     await waitFor(() => {
       expect(api.fetchEntitlement).toHaveBeenCalled();
@@ -373,7 +378,7 @@ describe('mobile auth-driven screens', () => {
       }
     });
 
-    const screen = render(<ProfileScreen onLogout={onLogout} userId="u1" auth={auth} />);
+    const screen = renderWithQueryClient(<ProfileScreen onLogout={onLogout} userId="u1" auth={auth} />);
 
     await waitFor(() => {
       expect(screen.getByText('Restore Pro Access')).toBeTruthy();
@@ -412,7 +417,7 @@ describe('mobile auth-driven screens', () => {
       }
     });
 
-    const screen = render(<ProfileScreen onLogout={onLogout} userId="u1" auth={auth} />);
+    const screen = renderWithQueryClient(<ProfileScreen onLogout={onLogout} userId="u1" auth={auth} />);
 
     await waitFor(() => {
       expect(screen.getByText('Export Account Data')).toBeTruthy();

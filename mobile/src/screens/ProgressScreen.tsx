@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { useQuery } from '@tanstack/react-query';
 import { fetchProgress, type AuthContext } from '../lib/api';
+import { queryKeys } from '../lib/queryKeys';
 import { theme } from '../lib/theme';
 
 interface ProgressScreenProps {
@@ -21,31 +22,12 @@ function formatError(error: unknown): string {
 }
 
 export function ProgressScreen(props: ProgressScreenProps) {
-  const [viewModel, setViewModel] = useState<ProgressViewModel | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const progressQuery = useQuery({
+    queryKey: queryKeys.progress(props.userId),
+    queryFn: () => fetchProgress(props.userId, props.auth)
+  });
 
-  useEffect(() => {
-    fetchProgress(props.userId, props.auth)
-      .then((progress) => {
-        const masteryValue = progress.totalSkills === 0 ? 0 : Math.round((progress.masteredSkills / progress.totalSkills) * 100);
-        setViewModel({
-          level: progress.currentLevel,
-          skills: `${progress.masteredSkills}/${progress.totalSkills}`,
-          mastery: `${masteryValue}%`,
-          streak: `${progress.streakDays}`,
-          plan: progress.plan === 'pro' && progress.premiumActive ? 'Pro' : 'Free'
-        });
-      })
-      .catch((reason) => {
-        setError(formatError(reason));
-      })
-      .finally(() => {
-        setLoading(false);
-      });
-  }, [props.auth, props.userId]);
-
-  if (loading) {
+  if (progressQuery.isPending) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator color={theme.accent} />
@@ -53,13 +35,23 @@ export function ProgressScreen(props: ProgressScreenProps) {
     );
   }
 
-  if (!viewModel) {
+  if (!progressQuery.data) {
     return (
       <View style={styles.container}>
-        <Text style={styles.error}>{error ?? 'Unable to load progress'}</Text>
+        <Text style={styles.error}>{progressQuery.error ? formatError(progressQuery.error) : 'Unable to load progress'}</Text>
       </View>
     );
   }
+
+  const progress = progressQuery.data;
+  const masteryValue = progress.totalSkills === 0 ? 0 : Math.round((progress.masteredSkills / progress.totalSkills) * 100);
+  const viewModel: ProgressViewModel = {
+    level: progress.currentLevel,
+    skills: `${progress.masteredSkills}/${progress.totalSkills}`,
+    mastery: `${masteryValue}%`,
+    streak: `${progress.streakDays}`,
+    plan: progress.plan === 'pro' && progress.premiumActive ? 'Pro' : 'Free'
+  };
 
   return (
     <View style={styles.container}>

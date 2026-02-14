@@ -1,6 +1,14 @@
 import mockSafeAreaContext from 'react-native-safe-area-context/jest/mock';
+import 'react-native-gesture-handler/jestSetup';
+import { cleanup } from '@testing-library/react-native';
+import { queryClient } from './src/lib/queryClient';
 
 jest.mock('react-native-safe-area-context', () => mockSafeAreaContext);
+
+afterEach(() => {
+  cleanup();
+  queryClient.clear();
+});
 
 jest.mock('expo-iap', () => ({
   initConnection: jest.fn().mockResolvedValue(undefined),

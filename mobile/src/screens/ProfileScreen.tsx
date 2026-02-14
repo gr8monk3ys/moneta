@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   deleteAccount as deleteAccountApi,
   exportAccountData,
@@ -8,8 +9,10 @@ import {
   logoutAll,
   syncEntitlement,
   type AuthContext,
-  type Entitlement
+  type Entitlement,
+  type EntitlementResponse
 } from '../lib/api';
+import { queryKeys } from '../lib/queryKeys';
 import { disconnectStoreBilling, restoreLatestSubscription } from '../lib/storeBilling';
 import { theme } from '../lib/theme';
 
@@ -24,31 +27,27 @@ function formatError(error: unknown): string {
 }
 
 export function ProfileScreen(props: ProfileProps) {
+  const queryClient = useQueryClient();
   const [message, setMessage] = useState<string | null>(null);
-  const [entitlement, setEntitlement] = useState<Entitlement | null>(null);
-  const [loadingEntitlement, setLoadingEntitlement] = useState(true);
   const [restoring, setRestoring] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteArmed, setDeleteArmed] = useState(false);
 
   useEffect(() => {
-    setLoadingEntitlement(true);
-    fetchEntitlement(props.userId, props.auth)
-      .then((response) => {
-        setEntitlement(response.entitlement);
-      })
-      .catch((error: unknown) => {
-        setMessage(formatError(error));
-      })
-      .finally(() => {
-        setLoadingEntitlement(false);
-      });
-
     return () => {
       disconnectStoreBilling().catch(() => undefined);
     };
-  }, [props.auth, props.userId]);
+  }, []);
+
+  const entitlementQuery = useQuery<EntitlementResponse>({
+    queryKey: queryKeys.entitlement(props.userId),
+    queryFn: () => fetchEntitlement(props.userId, props.auth)
+  });
+
+  const entitlement: Entitlement | null = entitlementQuery.data?.entitlement ?? null;
+  const loadingEntitlement = entitlementQuery.isPending;
+  const visibleMessage = message ?? (entitlementQuery.error ? formatError(entitlementQuery.error) : null);
 
   async function signOutCurrentSession() {
     try {
@@ -88,7 +87,7 @@ export function ProfileScreen(props: ProfileProps) {
         purchaseToken: restoredPurchase.purchaseToken
       });
 
-      setEntitlement(response.entitlement);
+      queryClient.setQueryData(queryKeys.entitlement(props.userId), response);
       if (response.entitlement.plan === 'pro') {
         setMessage(restoredPurchase.sandbox ? 'Pro access restored (sandbox).' : 'Pro access restored.');
       } else {
@@ -168,7 +167,7 @@ export function ProfileScreen(props: ProfileProps) {
         <Text style={styles.dangerText}>{deleting ? 'Deleting…' : 'Delete Account'}</Text>
       </Pressable>
 
-      {message ? <Text style={styles.message}>{message}</Text> : null}
+      {visibleMessage ? <Text style={styles.message}>{visibleMessage}</Text> : null}
     </View>
   );
 }
