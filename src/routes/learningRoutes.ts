@@ -101,7 +101,14 @@ function getProgressSummary(user: UserProfile) {
   };
 }
 
-function toDueReviews(user: UserProfile): { dueReviews: ReviewItem[]; entitlement: UserProfile['entitlement']; features: ReturnType<typeof resolveFeatureAccess> } {
+const MAX_PRACTICE_REVIEWS = 10;
+
+function toReviewQueues(user: UserProfile): {
+  dueReviews: ReviewItem[];
+  practiceReviews: ReviewItem[];
+  entitlement: UserProfile['entitlement'];
+  features: ReturnType<typeof resolveFeatureAccess>;
+} {
   const nowMs = Date.now();
   const entitlement = normalizeEntitlement(user.entitlement);
   const features = resolveFeatureAccess(entitlement);
@@ -114,6 +121,28 @@ function toDueReviews(user: UserProfile): { dueReviews: ReviewItem[]; entitlemen
         itemBySkillId.set(item.skillId, { lesson, item });
       }
     }
+  }
+
+  function enrichReview(review: ReviewItem): ReviewItem {
+    const resolved = itemBySkillId.get(review.skillId);
+    if (!resolved) {
+      return review;
+    }
+
+    const locked = Boolean(resolved.lesson?.premium) && !features.advancedTracks;
+    if (locked) {
+      return { ...review, locked: true };
+    }
+
+    return {
+      ...review,
+      contentItemId: resolved.item.itemId,
+      prompt: resolved.item.prompt,
+      format: resolved.item.format,
+      choices: resolved.item.choices,
+      explanation: resolved.item.explanation,
+      locked: false
+    };
   }
 
   const dueReviews = Object.values(user.skills)
@@ -134,33 +163,42 @@ function toDueReviews(user: UserProfile): { dueReviews: ReviewItem[]; entitlemen
       skillId: skill.skillId,
       dueDate: String(skill.nextReviewAt)
     }))
-    .map((review) => {
-      const resolved = itemBySkillId.get(review.skillId);
-      if (!resolved) {
-        return review;
+    .map(enrichReview);
+
+  const practiceReviews = Object.values(user.skills)
+    .filter((skill) => {
+      if (!skill.nextReviewAt) {
+        return false;
       }
 
-      const locked = Boolean(resolved.lesson?.premium) && !features.advancedTracks;
-      if (locked) {
-        return { ...review, locked: true };
-      }
-
-      return {
-        ...review,
-        contentItemId: resolved.item.itemId,
-        prompt: resolved.item.prompt,
-        format: resolved.item.format,
-        choices: resolved.item.choices,
-        explanation: resolved.item.explanation,
-        locked: false
-      };
-    });
+      return new Date(skill.nextReviewAt).getTime() > nowMs;
+    })
+    .sort((a, b) => {
+      const aMs = new Date(String(a.nextReviewAt)).getTime();
+      const bMs = new Date(String(b.nextReviewAt)).getTime();
+      return aMs - bMs;
+    })
+    .map((skill) => ({
+      itemId: `${skill.skillId}-practice`,
+      skillId: skill.skillId,
+      dueDate: String(skill.nextReviewAt)
+    }))
+    .map(enrichReview);
 
   const limitedReviews = typeof features.maxDueReviews === 'number'
     ? dueReviews.slice(0, features.maxDueReviews)
     : dueReviews;
 
-  return { dueReviews: limitedReviews, entitlement, features };
+  const practiceLimit = typeof features.maxDueReviews === 'number'
+    ? Math.min(features.maxDueReviews, MAX_PRACTICE_REVIEWS)
+    : MAX_PRACTICE_REVIEWS;
+
+  return {
+    dueReviews: limitedReviews,
+    practiceReviews: practiceReviews.slice(0, practiceLimit),
+    entitlement,
+    features
+  };
 }
 
 function resolveTimeZone(...candidates: Array<string | undefined>): string {
@@ -513,12 +551,13 @@ export function registerLearningRoutes(app: express.Express, deps: RouteDeps): v
       const { userId } = validateParams(req.params);
       ensureSelfAccess(req, userId);
       const user = await findUserOrThrow(deps, userId);
-      const today = toDueReviews(user);
+      const today = toReviewQueues(user);
       const nextLesson = getNextLessonForProgress(user, today.features.advancedTracks)
         ?? getNextLessonForLevel(user.currentLevel, today.features.advancedTracks);
       res.status(200).json({
         userId,
         dueReviews: today.dueReviews,
+        practiceReviews: today.practiceReviews,
         nextLesson: nextLesson ? toLessonOutline(nextLesson) : undefined,
         entitlement: today.entitlement,
         features: today.features

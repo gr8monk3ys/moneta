@@ -452,6 +452,8 @@ describe('Moneta API auth + learning flow', () => {
     expect(response.status).toBe(200);
     expect(response.body.dueReviews).toHaveLength(1);
     expect(response.body.dueReviews[0].skillId).toBe('due');
+    expect(response.body.practiceReviews).toHaveLength(1);
+    expect(response.body.practiceReviews[0].skillId).toBe('future');
   });
 
   it('exports account data and supports authenticated account deletion', async () => {

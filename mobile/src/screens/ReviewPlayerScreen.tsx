@@ -24,9 +24,13 @@ function resolveFormat(item: DueReview): NonNullable<DueReview['format']> {
 }
 
 export function ReviewPlayerScreen(props: ReviewPlayerProps) {
-  const [reviews, setReviews] = useState<DueReview[]>([]);
-  const [lockedCount, setLockedCount] = useState(0);
-  const [unavailableCount, setUnavailableCount] = useState(0);
+  const [mode, setMode] = useState<'due' | 'practice'>('due');
+  const [dueReviews, setDueReviews] = useState<DueReview[]>([]);
+  const [practiceReviews, setPracticeReviews] = useState<DueReview[]>([]);
+  const [dueLockedCount, setDueLockedCount] = useState(0);
+  const [dueUnavailableCount, setDueUnavailableCount] = useState(0);
+  const [practiceLockedCount, setPracticeLockedCount] = useState(0);
+  const [practiceUnavailableCount, setPracticeUnavailableCount] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -34,20 +38,34 @@ export function ReviewPlayerScreen(props: ReviewPlayerProps) {
   const [error, setError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState<Awaited<ReturnType<typeof completeSession>> | null>(null);
 
+  const reviews = mode === 'practice' ? practiceReviews : dueReviews;
+  const lockedCount = mode === 'practice' ? practiceLockedCount : dueLockedCount;
+  const unavailableCount = mode === 'practice' ? practiceUnavailableCount : dueUnavailableCount;
+  const title = mode === 'practice' ? 'Practice Reviews' : 'Daily Reviews';
+
   const loadReviews = useCallback(async () => {
     setLoading(true);
     setError(null);
 
     try {
       const today = await fetchToday(props.userId, props.auth);
-      const all = today.dueReviews ?? [];
-      const locked = all.filter((item) => item.locked).length;
-      const playable = all.filter((item) => !item.locked && item.contentItemId && item.prompt);
-      const unavailable = all.length - locked - playable.length;
+      const dueAll = today.dueReviews ?? [];
+      const dueLocked = dueAll.filter((item) => item.locked).length;
+      const duePlayable = dueAll.filter((item) => !item.locked && item.contentItemId && item.prompt);
+      const dueUnavailable = dueAll.length - dueLocked - duePlayable.length;
 
-      setLockedCount(locked);
-      setUnavailableCount(unavailable);
-      setReviews(playable);
+      const practiceAll = today.practiceReviews ?? [];
+      const practiceLocked = practiceAll.filter((item) => item.locked).length;
+      const practicePlayable = practiceAll.filter((item) => !item.locked && item.contentItemId && item.prompt);
+      const practiceUnavailable = practiceAll.length - practiceLocked - practicePlayable.length;
+
+      setMode('due');
+      setDueLockedCount(dueLocked);
+      setDueUnavailableCount(dueUnavailable);
+      setDueReviews(duePlayable);
+      setPracticeLockedCount(practiceLocked);
+      setPracticeUnavailableCount(practiceUnavailable);
+      setPracticeReviews(practicePlayable);
       setAnswers({});
       setCurrentIndex(0);
       setSubmitted(null);
@@ -72,6 +90,14 @@ export function ReviewPlayerScreen(props: ReviewPlayerProps) {
 
   function setAnswer(contentItemId: string, value: string) {
     setAnswers((prev) => ({ ...prev, [contentItemId]: value }));
+  }
+
+  function handleStartPractice() {
+    setMode('practice');
+    setAnswers({});
+    setCurrentIndex(0);
+    setSubmitted(null);
+    setError(null);
   }
 
   async function handleSubmit() {
@@ -111,7 +137,7 @@ export function ReviewPlayerScreen(props: ReviewPlayerProps) {
     );
   }
 
-  if (error && reviews.length === 0) {
+  if (error && dueReviews.length === 0 && practiceReviews.length === 0) {
     return (
       <View style={styles.container}>
         <Text style={styles.error}>{error}</Text>
@@ -123,11 +149,33 @@ export function ReviewPlayerScreen(props: ReviewPlayerProps) {
   }
 
   if (reviews.length === 0) {
+    if (mode === 'due' && practiceReviews.length > 0) {
+      return (
+        <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+          <View style={styles.hero}>
+            <Text style={styles.heroTitle}>{title}</Text>
+            <Text style={styles.heroSubtitle}>No playable reviews due right now.</Text>
+            {dueLockedCount > 0 ? <Text style={styles.heroSubtitle}>{dueLockedCount} reviews locked (Pro).</Text> : null}
+            {dueUnavailableCount > 0 ? <Text style={styles.heroSubtitle}>{dueUnavailableCount} reviews missing content.</Text> : null}
+            <Text style={styles.heroSubtitle}>Practice set available: {practiceReviews.length} skills.</Text>
+          </View>
+          <Pressable style={styles.button} onPress={handleStartPractice} disabled={submitting}>
+            <Text style={styles.buttonText}>Practice Now</Text>
+          </Pressable>
+          <Pressable style={styles.secondaryButton} onPress={() => props.onExit(false)} disabled={submitting}>
+            <Text style={styles.secondaryButtonText}>Back</Text>
+          </Pressable>
+        </ScrollView>
+      );
+    }
+
     return (
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
         <View style={styles.hero}>
-          <Text style={styles.heroTitle}>Daily Reviews</Text>
-          <Text style={styles.heroSubtitle}>No playable reviews due right now.</Text>
+          <Text style={styles.heroTitle}>{title}</Text>
+          <Text style={styles.heroSubtitle}>
+            {mode === 'practice' ? 'No practice reviews available right now.' : 'No playable reviews due right now.'}
+          </Text>
           {lockedCount > 0 ? <Text style={styles.heroSubtitle}>{lockedCount} reviews locked (Pro).</Text> : null}
           {unavailableCount > 0 ? <Text style={styles.heroSubtitle}>{unavailableCount} reviews missing content.</Text> : null}
         </View>
@@ -151,7 +199,7 @@ export function ReviewPlayerScreen(props: ReviewPlayerProps) {
         </View>
 
         <View style={styles.hero}>
-          <Text style={styles.heroTitle}>Reviews Submitted</Text>
+          <Text style={styles.heroTitle}>{mode === 'practice' ? 'Practice Submitted' : 'Reviews Submitted'}</Text>
           <Text style={styles.heroSubtitle}>Streak: {submitted.streakDays} days</Text>
         </View>
 
@@ -205,7 +253,7 @@ export function ReviewPlayerScreen(props: ReviewPlayerProps) {
       </View>
 
       <View style={styles.hero}>
-        <Text style={styles.heroTitle}>Daily Reviews</Text>
+        <Text style={styles.heroTitle}>{title}</Text>
         <Text style={styles.heroSubtitle}>Skill: {item.skillId}</Text>
         {lockedCount > 0 ? <Text style={styles.heroSubtitle}>{lockedCount} locked reviews (Pro).</Text> : null}
       </View>
@@ -317,4 +365,3 @@ const styles = StyleSheet.create({
   error: { color: theme.danger, textAlign: 'center' },
   resultItem: { marginTop: 12, gap: 6 }
 });
-

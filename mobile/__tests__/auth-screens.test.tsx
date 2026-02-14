@@ -230,19 +230,19 @@ describe('mobile auth-driven screens', () => {
       expect(screen.getByText('Next: Next Up')).toBeTruthy();
     });
 
-    fireEvent.press(screen.getByText('Run Placement'));
+    fireEvent.press(screen.getByText('Run Placement (Dev)'));
     await waitFor(() => {
       expect(api.submitPlacement).toHaveBeenCalled();
       expect(screen.getByText('Placed at F3')).toBeTruthy();
     });
 
-    fireEvent.press(screen.getByText('Submit Practice Session'));
+    fireEvent.press(screen.getByText('Submit Practice Session (Dev)'));
     await waitFor(() => {
       expect(api.completeSession).toHaveBeenCalled();
       expect(screen.getByText('Session complete • streak 8')).toBeTruthy();
     });
 
-    fireEvent.press(screen.getByText('Refresh Session'));
+    fireEvent.press(screen.getByText('Refresh Session (Dev)'));
     await waitFor(() => {
       expect(onTokensUpdated).toHaveBeenCalledWith({
         accessToken: 'na',
@@ -264,7 +264,7 @@ describe('mobile auth-driven screens', () => {
       expect(screen.getByText('dashboard failed')).toBeTruthy();
     });
 
-    fireEvent.press(screen.getByText('Refresh Session'));
+    fireEvent.press(screen.getByText('Refresh Session (Dev)'));
     await waitFor(() => {
       expect(screen.getByText('refresh failed')).toBeTruthy();
     });

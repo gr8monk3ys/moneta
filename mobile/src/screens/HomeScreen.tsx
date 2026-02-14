@@ -3,6 +3,8 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 import { completeSession, fetchLessonDetails, fetchProgress, fetchToday, refresh, submitPlacement, type AuthContext } from '../lib/api';
 import { theme } from '../lib/theme';
 
+const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
+
 interface HomeProps {
   userId: string;
   auth: AuthContext;
@@ -14,6 +16,7 @@ interface HomeProps {
 interface DashboardState {
   progress: string;
   reviews: string[];
+  practiceReviews: string[];
   streak: string;
   nextLesson: string;
   nextLessonId?: string;
@@ -29,6 +32,7 @@ export function HomeScreen(props: HomeProps) {
   const [dashboard, setDashboard] = useState<DashboardState>({
     progress: 'Loading progress…',
     reviews: [],
+    practiceReviews: [],
     streak: '—',
     nextLesson: 'Loading lesson…',
     nextLessonId: undefined,
@@ -48,6 +52,7 @@ export function HomeScreen(props: HomeProps) {
       setDashboard({
         progress: `Level ${progress.currentLevel} • ${progress.masteredSkills}/${progress.totalSkills} mastered`,
         reviews: today.dueReviews.map((item) => item.skillId),
+        practiceReviews: (today.practiceReviews ?? []).map((item) => item.skillId),
         streak: `${progress.streakDays}`,
         nextLesson: today.nextLesson?.title ?? 'No lesson available',
         nextLessonId: today.nextLesson?.lessonId,
@@ -88,11 +93,6 @@ export function HomeScreen(props: HomeProps) {
     setLoading(true);
 
     try {
-      if (dashboard.reviews.length === 0) {
-        setStatus('No reviews due.');
-        return;
-      }
-
       props.onStartReviews();
     } catch (error) {
       setStatus(formatError(error));
@@ -200,10 +200,16 @@ export function HomeScreen(props: HomeProps) {
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Today’s Reviews</Text>
-        {dashboard.reviews.length === 0 ? (
-          <Text style={styles.cardLine}>No reviews due.</Text>
-        ) : (
+        {dashboard.reviews.length > 0 ? (
           dashboard.reviews.map((review) => <Text key={review} style={styles.cardLine}>• {review}</Text>)
+        ) : dashboard.practiceReviews.length > 0 ? (
+          <>
+            <Text style={styles.cardLine}>No reviews due yet.</Text>
+            <Text style={styles.cardLine}>Practice set available:</Text>
+            {dashboard.practiceReviews.map((review) => <Text key={review} style={styles.cardLine}>• {review}</Text>)}
+          </>
+        ) : (
+          <Text style={styles.cardLine}>Complete a lesson to generate reviews.</Text>
         )}
         {dashboard.dueLimitNote ? <Text style={styles.limitNote}>{dashboard.dueLimitNote}</Text> : null}
       </View>
@@ -214,24 +220,32 @@ export function HomeScreen(props: HomeProps) {
       </View>
 
       <View style={styles.actions}>
-        <Pressable style={styles.button} onPress={handlePlacement} disabled={loading}>
-          <Text style={styles.buttonText}>Run Placement</Text>
-        </Pressable>
-        <Pressable style={styles.button} onPress={handleStartReviews} disabled={loading || dashboard.reviews.length === 0}>
+        <Pressable
+          style={styles.button}
+          onPress={handleStartReviews}
+          disabled={loading || (dashboard.reviews.length === 0 && dashboard.practiceReviews.length === 0)}
+        >
           <Text style={styles.buttonText}>Start Reviews</Text>
         </Pressable>
         <Pressable style={styles.button} onPress={handleStartNextLesson} disabled={loading || !dashboard.nextLessonId}>
           <Text style={styles.buttonText}>Start Next Lesson</Text>
         </Pressable>
-        <Pressable style={styles.button} onPress={handlePractice} disabled={loading}>
-          <Text style={styles.buttonText}>Submit Practice Session</Text>
-        </Pressable>
-        <Pressable style={styles.button} onPress={handleCompleteNextLessonDemo} disabled={loading}>
-          <Text style={styles.buttonText}>Complete Next Lesson (Demo)</Text>
-        </Pressable>
-        <Pressable style={styles.secondaryButton} onPress={handleRefresh} disabled={loading}>
-          <Text style={styles.secondaryButtonText}>Refresh Session</Text>
-        </Pressable>
+        {isDev ? (
+          <>
+            <Pressable style={styles.button} onPress={handlePlacement} disabled={loading}>
+              <Text style={styles.buttonText}>Run Placement (Dev)</Text>
+            </Pressable>
+            <Pressable style={styles.button} onPress={handlePractice} disabled={loading}>
+              <Text style={styles.buttonText}>Submit Practice Session (Dev)</Text>
+            </Pressable>
+            <Pressable style={styles.button} onPress={handleCompleteNextLessonDemo} disabled={loading}>
+              <Text style={styles.buttonText}>Complete Next Lesson (Demo)</Text>
+            </Pressable>
+            <Pressable style={styles.secondaryButton} onPress={handleRefresh} disabled={loading}>
+              <Text style={styles.secondaryButtonText}>Refresh Session (Dev)</Text>
+            </Pressable>
+          </>
+        ) : null}
       </View>
 
       {loading ? <ActivityIndicator color={theme.accent} /> : null}

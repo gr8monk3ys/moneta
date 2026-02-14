@@ -52,19 +52,22 @@ export interface ProgressResponse {
   totalLessons?: number;
 }
 
+export interface TodayReviewItem {
+  itemId: string;
+  skillId: string;
+  dueDate: string;
+  contentItemId?: string;
+  prompt?: string;
+  format?: 'mcq' | 'numeric' | 'scenario';
+  choices?: string[];
+  explanation?: string;
+  locked?: boolean;
+}
+
 export interface TodayResponse {
   userId: string;
-  dueReviews: Array<{
-    itemId: string;
-    skillId: string;
-    dueDate: string;
-    contentItemId?: string;
-    prompt?: string;
-    format?: 'mcq' | 'numeric' | 'scenario';
-    choices?: string[];
-    explanation?: string;
-    locked?: boolean;
-  }>;
+  dueReviews: TodayReviewItem[];
+  practiceReviews?: TodayReviewItem[];
   nextLesson?: { lessonId: string; title: string; estimatedMinutes: number };
   entitlement: Entitlement;
   features: FeatureAccess;
