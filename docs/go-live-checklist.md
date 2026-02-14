@@ -63,9 +63,16 @@ Execution companion:
 - [ ] Confirm store SKU env vars are set for release builds:
   - `EXPO_PUBLIC_IOS_SUBSCRIPTION_PRODUCT_IDS`
   - `EXPO_PUBLIC_ANDROID_SUBSCRIPTION_PRODUCT_IDS`
+- [ ] Publish and verify legal URLs used by the app/store listing:
+  - Privacy policy (`docs/compliance/privacy-policy.md`)
+  - Terms of service (`docs/compliance/terms-of-service.md`)
+  - Subscription terms (`docs/compliance/subscription-terms.md`)
+  - Financial education disclaimer (`docs/compliance/financial-education-disclaimer.md`)
+  - Account deletion policy (`docs/compliance/account-data-deletion-policy.md`)
 - [ ] Verify secure auth persistence and logout flows on cold app restart.
 - [ ] Verify in-app account export/deletion flows meet App Store and Play policy requirements.
 - [ ] Complete store billing lifecycle validation using `docs/store-billing-qa-matrix-template.md`.
+- [ ] Run manual smoke QA checklist: `docs/qa/mobile-manual-qa-checklist.md`
 
 ## P1 — Should complete in first post-launch sprint
 

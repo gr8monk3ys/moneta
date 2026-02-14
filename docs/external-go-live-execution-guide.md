@@ -142,7 +142,9 @@ Publish legal documents and wire URLs into store metadata.
 ### Drafts provided
 
 - `docs/compliance/privacy-policy.md`
+- `docs/compliance/terms-of-service.md`
 - `docs/compliance/subscription-terms.md`
+- `docs/compliance/financial-education-disclaimer.md`
 - `docs/compliance/account-data-deletion-policy.md`
 
 ### Required finalization
