@@ -1,0 +1,81 @@
+name: Deploy Staging
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - work
+
+concurrency:
+  group: moneta-staging-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Preflight staging configuration
+        env:
+          NODE_ENV: staging
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          JWT_REFRESH_SECRET: ${{ secrets.JWT_REFRESH_SECRET }}
+          METRICS_TOKEN: ${{ secrets.METRICS_TOKEN }}
+          CORS_ORIGINS: ${{ secrets.CORS_ORIGINS }}
+        run: ./scripts/staging-readiness-check.sh
+
+      - name: Derive release id
+        id: release
+        run: echo "value=$(date -u +'%Y%m%d%H%M%S')-${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy application
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          DEPLOY_SERVICE_NAME: ${{ secrets.DEPLOY_SERVICE_NAME }}
+          KEEP_RELEASES: ${{ vars.DEPLOY_KEEP_RELEASES }}
+          RELEASE_ID: ${{ steps.release.outputs.value }}
+        run: ./scripts/deploy.sh
+
+      - name: Health check
+        env:
+          HEALTHCHECK_URL: ${{ secrets.HEALTHCHECK_URL }}
+          METRICS_TOKEN: ${{ secrets.METRICS_TOKEN }}
+        run: |
+          curl --fail --show-error --silent \
+            --retry 8 --retry-delay 5 --max-time 10 \
+            "$HEALTHCHECK_URL/health"
+
+          curl --fail --show-error --silent \
+            --retry 8 --retry-delay 5 --max-time 10 \
+            "$HEALTHCHECK_URL/ready"
+
+          curl --fail --show-error --silent \
+            --retry 5 --retry-delay 3 --max-time 10 \
+            -H "Authorization: Bearer ${METRICS_TOKEN}" \
+            "$HEALTHCHECK_URL/metrics" >/dev/null
+
+  rollback:
+    runs-on: ubuntu-latest
+    needs: deploy
+    if: ${{ needs.deploy.result == 'failure' }}
+    environment: staging
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Rollback application
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          DEPLOY_SERVICE_NAME: ${{ secrets.DEPLOY_SERVICE_NAME }}
+        run: ./scripts/rollback.sh
+
