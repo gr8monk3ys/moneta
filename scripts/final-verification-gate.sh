@@ -48,6 +48,7 @@ fi
 
 pushd "${ROOT_DIR}/mobile" >/dev/null
 run_step "Mobile lint" npm run lint
+run_step "Mobile typecheck" npm run typecheck
 run_step "Mobile tests" npm test -- --runInBand
 run_step "Mobile coverage" npm run test:coverage
 run_step "Mobile security audit (high/critical)" npm audit --audit-level=high
