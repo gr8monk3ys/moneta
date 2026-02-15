@@ -12,8 +12,9 @@ interface AuthResult {
 }
 
 export function LoginScreen(props: { onAuthenticated: (auth: AuthResult) => void }) {
-  const [email, setEmail] = useState('demo@example.com');
-  const [password, setPassword] = useState('password123');
+  const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
+  const [email, setEmail] = useState(isDev ? 'demo@example.com' : '');
+  const [password, setPassword] = useState(isDev ? 'password123' : '');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -40,7 +41,7 @@ export function LoginScreen(props: { onAuthenticated: (auth: AuthResult) => void
     }
   }
 
-  async function quickCreateDemo() {
+  async function createAccount() {
     setLoading(true);
     setError(null);
 
@@ -75,8 +76,8 @@ export function LoginScreen(props: { onAuthenticated: (auth: AuthResult) => void
         <Text style={styles.primaryText}>{loading ? 'Loading…' : 'Start Learning'}</Text>
       </Pressable>
 
-      <Pressable style={styles.secondaryButton} onPress={quickCreateDemo} disabled={loading}>
-        <Text style={styles.secondaryText}>Create Demo User</Text>
+      <Pressable style={styles.secondaryButton} onPress={createAccount} disabled={loading}>
+        <Text style={styles.secondaryText}>Create Account</Text>
       </Pressable>
 
       <View style={styles.legalRow}>

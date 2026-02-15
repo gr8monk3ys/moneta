@@ -179,11 +179,11 @@ describe('mobile auth-driven screens', () => {
     }, { timeout: 10000 });
   });
 
-  it('handles login quick-create failures', async () => {
+  it('handles account creation failures', async () => {
     const screen = render(<LoginScreen onAuthenticated={jest.fn()} />);
     (api.register as jest.Mock).mockRejectedValue(new Error('register failed'));
 
-    fireEvent.press(screen.getByText('Create Demo User'));
+    fireEvent.press(screen.getByText('Create Account'));
 
     await waitFor(() => {
       expect(screen.getByText('register failed')).toBeTruthy();
