@@ -25,7 +25,8 @@ export function metricsMiddleware() {
 
     res.on('finish', () => {
       const elapsedMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
-      const route = req.route?.path ? String(req.route.path) : req.path;
+      // Avoid high-cardinality labels: fall back to a stable value for unmatched requests.
+      const route = req.route?.path ? String(req.route.path) : 'unmatched';
       const statusCode = String(res.statusCode);
 
       httpRequestDuration
