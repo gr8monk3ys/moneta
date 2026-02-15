@@ -22,6 +22,11 @@ Execution companion:
   - `APPLE_SHARED_SECRET` (if iOS subscriptions are enabled)
   - `GOOGLE_PLAY_PACKAGE_NAME` + `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` (if Android subscriptions are enabled)
 
+### Legal and licensing
+- [ ] Decide the intended software license for the repository (open-source vs proprietary).
+- [ ] Ensure the declared license matches everywhere it is published (for example `/LICENSE` vs `/package.json`).
+- [ ] Validate any third-party attribution/notice requirements for dependencies and bundled assets.
+
 ### Runtime configuration
 - [ ] Set all required production environment variables:
   - `NODE_ENV=production`
