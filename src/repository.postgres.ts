@@ -1,10 +1,11 @@
 import { Pool } from 'pg';
 import { normalizeEntitlement } from './billing.js';
-import type { ConsumeRefreshTokenInput, UserRepository } from './repository.js';
+import type { ConsumePasswordResetTokenInput, ConsumeRefreshTokenInput, UserRepository } from './repository.js';
 import type {
   AuthUser,
   BillingWebhookEventRecord,
   LessonCompletionRecord,
+  PasswordResetTokenRecord,
   RefreshTokenRecord,
   SkillState,
   SubscriptionEntitlement,
@@ -71,6 +72,17 @@ function toRefreshRecord(row: Record<string, unknown>): RefreshTokenRecord {
   };
 }
 
+function toPasswordResetTokenRecord(row: Record<string, unknown>): PasswordResetTokenRecord {
+  return {
+    tokenId: String(row.token_id),
+    userId: String(row.user_id),
+    tokenHash: String(row.token_hash),
+    createdAt: new Date(row.created_at as string).toISOString(),
+    expiresAt: new Date(row.expires_at as string).toISOString(),
+    usedAt: row.used_at ? new Date(row.used_at as string).toISOString() : undefined
+  };
+}
+
 function toBillingWebhookRecord(row: Record<string, unknown>): BillingWebhookEventRecord {
   return {
     eventId: String(row.event_id),
@@ -127,6 +139,17 @@ export class PostgresUserRepository implements UserRepository {
       email: String(row.email),
       passwordHash: String(row.password_hash)
     };
+  }
+
+  public async updateAuthUserPassword(userId: string, passwordHash: string): Promise<void> {
+    const result = await this.pool.query(
+      'UPDATE auth_users SET password_hash = $2 WHERE user_id = $1',
+      [userId, passwordHash]
+    );
+
+    if ((result.rowCount ?? 0) === 0) {
+      throw new Error('User not found');
+    }
   }
 
   public async getUserProfile(userId: string): Promise<UserProfile | null> {
@@ -284,6 +307,57 @@ export class PostgresUserRepository implements UserRepository {
     );
   }
 
+  public async deletePasswordResetTokensByUser(userId: string): Promise<void> {
+    await this.pool.query(
+      'DELETE FROM password_reset_tokens WHERE user_id = $1',
+      [userId]
+    );
+  }
+
+  public async storePasswordResetToken(record: PasswordResetTokenRecord): Promise<void> {
+    await this.pool.query(
+      `
+      INSERT INTO password_reset_tokens (token_id, user_id, token_hash, created_at, expires_at, used_at)
+      VALUES ($1, $2, $3, $4, $5, $6)
+      `,
+      [
+        record.tokenId,
+        record.userId,
+        record.tokenHash,
+        record.createdAt,
+        record.expiresAt,
+        record.usedAt ?? null
+      ]
+    );
+  }
+
+  public async consumePasswordResetToken(input: ConsumePasswordResetTokenInput): Promise<PasswordResetTokenRecord | null> {
+    const result = await this.pool.query(
+      `
+      UPDATE password_reset_tokens
+      SET used_at = $3::timestamptz
+      WHERE user_id = $1
+        AND token_hash = $2
+        AND used_at IS NULL
+        AND expires_at > $3::timestamptz
+      RETURNING token_id, user_id, token_hash, created_at, expires_at, used_at
+      `,
+      [input.userId, input.tokenHash, input.nowIso]
+    );
+
+    const row = result.rows[0];
+    return row ? toPasswordResetTokenRecord(row as Record<string, unknown>) : null;
+  }
+
+  public async pruneExpiredPasswordResetTokens(nowIso: string): Promise<number> {
+    const result = await this.pool.query(
+      'DELETE FROM password_reset_tokens WHERE expires_at <= $1::timestamptz RETURNING token_id',
+      [nowIso]
+    );
+
+    return result.rowCount ?? 0;
+  }
+
   public async hasProcessedBillingWebhookEvent(eventId: string): Promise<boolean> {
     const result = await this.pool.query(
       'SELECT event_id FROM billing_webhook_events WHERE event_id = $1 LIMIT 1',
@@ -335,6 +409,10 @@ export class PostgresUserRepository implements UserRepository {
         'DELETE FROM refresh_tokens WHERE user_id = $1',
         [userId]
       );
+      const resetResult = await client.query(
+        'DELETE FROM password_reset_tokens WHERE user_id = $1',
+        [userId]
+      );
       const billingResult = await client.query(
         'DELETE FROM billing_webhook_events WHERE user_id = $1',
         [userId]
@@ -352,6 +430,7 @@ export class PostgresUserRepository implements UserRepository {
 
       const removed = (
         (tokenResult.rowCount ?? 0) +
+        (resetResult.rowCount ?? 0) +
         (billingResult.rowCount ?? 0) +
         (profileResult.rowCount ?? 0) +
         (authResult.rowCount ?? 0)

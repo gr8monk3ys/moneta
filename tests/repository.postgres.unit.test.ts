@@ -237,14 +237,15 @@ describe('PostgresUserRepository', () => {
       throw new Error(`Unhandled SQL in test: ${sql}`);
     });
 
-    const transactionClient = {
-      query: vi.fn()
-        .mockResolvedValueOnce({})
-        .mockResolvedValueOnce({ rowCount: 2 })
-        .mockResolvedValueOnce({ rowCount: 1 })
-        .mockResolvedValueOnce({ rowCount: 1 })
-        .mockResolvedValueOnce({ rowCount: 1 })
-        .mockResolvedValueOnce({}),
+	    const transactionClient = {
+	      query: vi.fn()
+	        .mockResolvedValueOnce({})
+	        .mockResolvedValueOnce({ rowCount: 2 })
+	        .mockResolvedValueOnce({ rowCount: 0 })
+	        .mockResolvedValueOnce({ rowCount: 1 })
+	        .mockResolvedValueOnce({ rowCount: 1 })
+	        .mockResolvedValueOnce({ rowCount: 1 })
+	        .mockResolvedValueOnce({}),
       release: vi.fn()
     };
     pool.connect.mockResolvedValue(transactionClient);
@@ -289,11 +290,11 @@ describe('PostgresUserRepository', () => {
       processedAt: '2026-02-01T00:00:00.000Z'
     });
 
-    expect(await repo.hasProcessedBillingWebhookEvent('evt_1')).toBe(true);
-    expect(await repo.deleteUserAccount('u1')).toBe(true);
-    expect(transactionClient.query).toHaveBeenCalledTimes(6);
-    expect(transactionClient.release).toHaveBeenCalledTimes(1);
-    expect(await repo.checkReadiness()).toBe(true);
-    expect(await repo.checkReadiness()).toBe(false);
-  });
+	    expect(await repo.hasProcessedBillingWebhookEvent('evt_1')).toBe(true);
+	    expect(await repo.deleteUserAccount('u1')).toBe(true);
+	    expect(transactionClient.query).toHaveBeenCalledTimes(7);
+	    expect(transactionClient.release).toHaveBeenCalledTimes(1);
+	    expect(await repo.checkReadiness()).toBe(true);
+	    expect(await repo.checkReadiness()).toBe(false);
+	  });
 });

@@ -34,6 +34,41 @@ ACCESS_TOKEN="$(echo "$TOKENS_JSON" | jq -r .accessToken)"
 REFRESH_TOKEN="$(echo "$TOKENS_JSON" | jq -r .refreshToken)"
 ```
 
+## Password reset (email code)
+
+This flow requires SMTP to be configured so the API can send the reset code email.
+
+1) Request a code:
+
+```bash
+curl -fsS -X POST "$BASE_URL/api/auth/password/reset/request" \
+  -H 'content-type: application/json' \
+  -d "{\"email\":\"$EMAIL\"}" | jq .
+```
+
+2) Get the 8-digit code from your email, then confirm:
+
+```bash
+RESET_CODE="12345678"
+NEW_PASSWORD="new-password-123"
+
+curl -fsS -X POST "$BASE_URL/api/auth/password/reset/confirm" \
+  -H 'content-type: application/json' \
+  -d "{\"email\":\"$EMAIL\",\"code\":\"$RESET_CODE\",\"newPassword\":\"$NEW_PASSWORD\"}" | jq .
+```
+
+3) Verify old password fails and new password works:
+
+```bash
+curl -fsS -X POST "$BASE_URL/api/auth/login" \
+  -H 'content-type: application/json' \
+  -d "{\"email\":\"$EMAIL\",\"password\":\"$PASSWORD\"}" || true
+
+curl -fsS -X POST "$BASE_URL/api/auth/login" \
+  -H 'content-type: application/json' \
+  -d "{\"email\":\"$EMAIL\",\"password\":\"$NEW_PASSWORD\"}" | jq .
+```
+
 ## Fetch progress + today
 
 ```bash

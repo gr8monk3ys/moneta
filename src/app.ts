@@ -3,6 +3,7 @@ import express from 'express';
 import rateLimit, { type Store } from 'express-rate-limit';
 import helmet from 'helmet';
 import { createBillingVerifier, type BillingVerifier } from './billing.verification.js';
+import type { EmailService } from './email.js';
 import { ApiError } from './errors.js';
 import { requestLogger, type RequestLoggerRequest } from './logger.js';
 import { metricsMiddleware } from './metrics.js';
@@ -17,6 +18,7 @@ import type { RouteDeps } from './routes/types.js';
 interface AppOptions {
   repository: UserRepository;
   billingVerifier?: BillingVerifier;
+  emailService?: EmailService;
   jwtSecret: string;
   jwtRefreshSecret: string;
   jwtAccessTtlSeconds: number;
@@ -46,6 +48,11 @@ function parseAllowedOrigins(origins: string[]): cors.CorsOptions {
 
 export function createApp(options: AppOptions): express.Express {
   const app = express();
+  const emailService: EmailService = options.emailService ?? {
+    sendPasswordResetCode: async () => {
+      throw new ApiError(500, 'Email service is not configured');
+    }
+  };
   const deps: RouteDeps = {
     repository: options.repository,
     billingVerifier: options.billingVerifier ?? createBillingVerifier({
@@ -53,6 +60,7 @@ export function createApp(options: AppOptions): express.Express {
       allowSandboxTokens: true,
       webhookSecret: 'dev-billing-webhook-secret'
     }),
+    emailService,
     jwtSecret: options.jwtSecret,
     jwtRefreshSecret: options.jwtRefreshSecret,
     jwtAccessTtlSeconds: options.jwtAccessTtlSeconds,

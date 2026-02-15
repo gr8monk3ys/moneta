@@ -17,6 +17,8 @@ Execution companion:
   - `METRICS_TOKEN` is at least 24 characters.
   - No placeholder/default-style values are used.
 - [ ] Ensure no secrets are logged (request bodies, auth headers, tokens).
+- [ ] Configure outbound email for password reset codes:
+  - `SMTP_HOST`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` (and `SMTP_PORT`/`SMTP_SECURE` as needed)
 - [ ] Configure billing secrets and provider credentials:
   - `BILLING_WEBHOOK_SECRET`
   - `APPLE_SHARED_SECRET` (if iOS subscriptions are enabled)

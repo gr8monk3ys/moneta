@@ -3,13 +3,14 @@ import { describe, expect, it } from 'vitest';
 import { createDefaultEntitlement } from '../src/billing.js';
 import { createBillingVerifier, createWebhookSignature } from '../src/billing.verification.js';
 import { createApp } from '../src/app.js';
+import type { EmailService } from '../src/email.js';
 import { InMemoryUserRepository } from '../src/repository.memory.js';
 
 async function sleep(ms: number): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function buildApp(accessTtlSeconds = 3600, refreshTtlSeconds = 604800) {
+function buildApp(accessTtlSeconds = 3600, refreshTtlSeconds = 604800, emailService?: EmailService) {
   const repository = new InMemoryUserRepository();
   const billingVerifier = createBillingVerifier({
     nodeEnv: 'development',
@@ -19,6 +20,7 @@ function buildApp(accessTtlSeconds = 3600, refreshTtlSeconds = 604800) {
   const app = createApp({
     repository,
     billingVerifier,
+    emailService,
     jwtSecret: 'test-secret',
     jwtRefreshSecret: 'test-refresh-secret',
     jwtAccessTtlSeconds: accessTtlSeconds,
@@ -73,6 +75,46 @@ describe('Moneta API auth + learning flow', () => {
     expect(loginResponse.body.refreshToken).toBeTruthy();
     expect(loginResponse.body.userId).toBeTruthy();
     expect(loginResponse.body.sessionId).toBeTruthy();
+  });
+
+  it('supports password reset flow via emailed code', async () => {
+    const sent: Array<{ to: string; code: string; expiresAt: string }> = [];
+    const emailService: EmailService = {
+      sendPasswordResetCode: async (input) => {
+        sent.push(input);
+      }
+    };
+    const { app } = buildApp(3600, 604800, emailService);
+
+    await request(app).post('/api/auth/register').send({
+      email: 'reset@example.com',
+      password: 'password123'
+    });
+
+    const requested = await request(app).post('/api/auth/password/reset/request').send({
+      email: 'reset@example.com'
+    });
+    expect(requested.status).toBe(200);
+    expect(sent).toHaveLength(1);
+
+    const confirm = await request(app).post('/api/auth/password/reset/confirm').send({
+      email: 'reset@example.com',
+      code: sent[0].code,
+      newPassword: 'newpassword123'
+    });
+    expect(confirm.status).toBe(200);
+
+    const oldLogin = await request(app).post('/api/auth/login').send({
+      email: 'reset@example.com',
+      password: 'password123'
+    });
+    expect(oldLogin.status).toBe(401);
+
+    const newLogin = await request(app).post('/api/auth/login').send({
+      email: 'reset@example.com',
+      password: 'newpassword123'
+    });
+    expect(newLogin.status).toBe(200);
   });
 
   it('returns validation and conflict errors for register', async () => {

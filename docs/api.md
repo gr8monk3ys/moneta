@@ -27,6 +27,22 @@ Registers a user with email/password and initializes their finance profile.
 ### `POST /api/auth/login`
 Returns an access token and refresh token.
 
+### `POST /api/auth/password/reset/request`
+Requests a one-time password reset code for the given email address.
+- Body:
+  - `email`
+- Response:
+  - `{ success: true }` (always; does not reveal whether the email exists)
+
+### `POST /api/auth/password/reset/confirm`
+Resets the password using a valid reset code.
+- Body:
+  - `email`
+  - `code` (8-digit code)
+  - `newPassword` (min 8 chars)
+- Response:
+  - `{ success: true }`
+
 ### `POST /api/auth/refresh`
 Rotates refresh token and issues a fresh access/refresh pair.
 

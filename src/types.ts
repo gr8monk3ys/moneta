@@ -56,6 +56,15 @@ export interface RefreshTokenRecord {
   revokedAt?: string;
 }
 
+export interface PasswordResetTokenRecord {
+  tokenId: string;
+  userId: string;
+  tokenHash: string;
+  createdAt: string;
+  expiresAt: string;
+  usedAt?: string;
+}
+
 export interface BillingWebhookEventRecord {
   eventId: string;
   userId: string;
