@@ -20,7 +20,7 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "UNLICENSED",
   "type": "module",
   "dependencies": {
     "bcryptjs": "^3.0.3",
