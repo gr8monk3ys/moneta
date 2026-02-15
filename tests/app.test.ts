@@ -34,7 +34,6 @@ async function buildAuthedApp(accessTtlSeconds = 3600, refreshTtlSeconds = 60480
   const { app } = buildApp(accessTtlSeconds, refreshTtlSeconds);
 
   await request(app).post('/api/auth/register').send({
-    userId: 'demo-user',
     email: 'demo@example.com',
     password: 'password123'
   });
@@ -46,6 +45,7 @@ async function buildAuthedApp(accessTtlSeconds = 3600, refreshTtlSeconds = 60480
 
   return {
     app,
+    userId: loginResponse.body.userId as string,
     accessToken: loginResponse.body.accessToken as string,
     refreshToken: loginResponse.body.refreshToken as string
   };
@@ -56,12 +56,12 @@ describe('Moneta API auth + learning flow', () => {
     const { app } = buildApp();
 
     const registerResponse = await request(app).post('/api/auth/register').send({
-      userId: 'auth-user',
       email: 'auth@example.com',
       password: 'password123'
     });
 
     expect(registerResponse.status).toBe(201);
+    expect(registerResponse.body.userId).toBeTruthy();
 
     const loginResponse = await request(app).post('/api/auth/login').send({
       email: 'auth@example.com',
@@ -71,6 +71,7 @@ describe('Moneta API auth + learning flow', () => {
     expect(loginResponse.status).toBe(200);
     expect(loginResponse.body.accessToken).toBeTruthy();
     expect(loginResponse.body.refreshToken).toBeTruthy();
+    expect(loginResponse.body.userId).toBeTruthy();
     expect(loginResponse.body.sessionId).toBeTruthy();
   });
 
@@ -78,20 +79,17 @@ describe('Moneta API auth + learning flow', () => {
     const { app } = buildApp();
 
     const invalid = await request(app).post('/api/auth/register').send({
-      userId: '',
       email: 'not-an-email',
       password: 'short'
     });
     expect(invalid.status).toBe(400);
 
     await request(app).post('/api/auth/register').send({
-      userId: 'dup-user',
       email: 'dup@example.com',
       password: 'password123'
     });
 
     const duplicate = await request(app).post('/api/auth/register').send({
-      userId: 'dup-user-2',
       email: 'dup@example.com',
       password: 'password123'
     });
@@ -101,11 +99,11 @@ describe('Moneta API auth + learning flow', () => {
   it('rejects invalid login credentials and missing bearer token', async () => {
     const { app } = buildApp();
 
-    await request(app).post('/api/auth/register').send({
-      userId: 'auth-user',
+    const register = await request(app).post('/api/auth/register').send({
       email: 'auth@example.com',
       password: 'password123'
     });
+    const userId = register.body.userId as string;
 
     const badLogin = await request(app).post('/api/auth/login').send({
       email: 'auth@example.com',
@@ -113,7 +111,7 @@ describe('Moneta API auth + learning flow', () => {
     });
     expect(badLogin.status).toBe(401);
 
-    const missingToken = await request(app).get('/api/progress/auth-user');
+    const missingToken = await request(app).get(`/api/progress/${userId}`);
     expect(missingToken.status).toBe(401);
   });
 
@@ -160,11 +158,11 @@ describe('Moneta API auth + learning flow', () => {
   });
 
   it('rejects expired access token', async () => {
-    const { app, accessToken } = await buildAuthedApp(1, 604800);
+    const { app, accessToken, userId } = await buildAuthedApp(1, 604800);
     await sleep(1100);
 
     const response = await request(app)
-      .get('/api/progress/demo-user')
+      .get(`/api/progress/${userId}`)
       .set('Authorization', `Bearer ${accessToken}`);
 
     expect(response.status).toBe(401);
@@ -173,16 +171,17 @@ describe('Moneta API auth + learning flow', () => {
   it('protects user resources from other user token', async () => {
     const { app } = buildApp();
 
-    await request(app).post('/api/auth/register').send({
-      userId: 'user-a',
+    const registerA = await request(app).post('/api/auth/register').send({
       email: 'a@example.com',
       password: 'password123'
     });
-    await request(app).post('/api/auth/register').send({
-      userId: 'user-b',
+    expect(registerA.body.userId).toBeTruthy();
+
+    const registerB = await request(app).post('/api/auth/register').send({
       email: 'b@example.com',
       password: 'password123'
     });
+    const userBId = registerB.body.userId as string;
 
     const login = await request(app).post('/api/auth/login').send({
       email: 'a@example.com',
@@ -190,7 +189,7 @@ describe('Moneta API auth + learning flow', () => {
     });
 
     const forbidden = await request(app)
-      .get('/api/progress/user-b')
+      .get(`/api/progress/${userBId}`)
       .set('Authorization', `Bearer ${login.body.accessToken as string}`);
 
     expect(forbidden.status).toBe(403);
@@ -213,7 +212,7 @@ describe('Moneta API auth + learning flow', () => {
   });
 
   it('supports learn/progress/session happy path', async () => {
-    const { app, accessToken } = await buildAuthedApp();
+    const { app, accessToken, userId } = await buildAuthedApp();
 
     const placement = await request(app)
       .post('/api/onboarding/placement')
@@ -222,7 +221,7 @@ describe('Moneta API auth + learning flow', () => {
     expect(placement.status).toBe(200);
 
     const today = await request(app)
-      .get('/api/learn/today/demo-user')
+      .get(`/api/learn/today/${userId}`)
       .set('Authorization', `Bearer ${accessToken}`);
     expect(today.status).toBe(200);
 
@@ -233,16 +232,16 @@ describe('Moneta API auth + learning flow', () => {
     expect(session.status).toBe(200);
 
     const progress = await request(app)
-      .get('/api/progress/demo-user')
+      .get(`/api/progress/${userId}`)
       .set('Authorization', `Bearer ${accessToken}`);
     expect(progress.status).toBe(200);
   });
 
   it('returns curriculum path metadata and enforces premium lesson access', async () => {
-    const { app, accessToken } = await buildAuthedApp();
+    const { app, accessToken, userId } = await buildAuthedApp();
 
     const pathResponse = await request(app)
-      .get('/api/learn/path/demo-user')
+      .get(`/api/learn/path/${userId}`)
       .set('Authorization', `Bearer ${accessToken}`);
 
     expect(pathResponse.status).toBe(200);
@@ -280,10 +279,10 @@ describe('Moneta API auth + learning flow', () => {
   });
 
   it('tracks lesson completion and advances next lesson in ordered path', async () => {
-    const { app, accessToken } = await buildAuthedApp();
+    const { app, accessToken, userId } = await buildAuthedApp();
 
     const initialToday = await request(app)
-      .get('/api/learn/today/demo-user')
+      .get(`/api/learn/today/${userId}`)
       .set('Authorization', `Bearer ${accessToken}`);
 
     expect(initialToday.status).toBe(200);
@@ -315,7 +314,7 @@ describe('Moneta API auth + learning flow', () => {
     });
 
     const pathResponse = await request(app)
-      .get('/api/learn/path/demo-user')
+      .get(`/api/learn/path/${userId}`)
       .set('Authorization', `Bearer ${accessToken}`);
 
     expect(pathResponse.status).toBe(200);
@@ -323,7 +322,7 @@ describe('Moneta API auth + learning flow', () => {
     expect(completedLesson?.completed).toBe(true);
 
     const nextToday = await request(app)
-      .get('/api/learn/today/demo-user')
+      .get(`/api/learn/today/${userId}`)
       .set('Authorization', `Bearer ${accessToken}`);
 
     expect(nextToday.status).toBe(200);
@@ -420,11 +419,11 @@ describe('Moneta API auth + learning flow', () => {
   it('returns only reviews that are due based on persisted schedule', async () => {
     const { app, repository } = buildApp();
 
-    await request(app).post('/api/auth/register').send({
-      userId: 'review-user',
+    const register = await request(app).post('/api/auth/register').send({
       email: 'review-user@example.com',
       password: 'password123'
     });
+    const userId = register.body.userId as string;
 
     const login = await request(app).post('/api/auth/login').send({
       email: 'review-user@example.com',
@@ -433,7 +432,7 @@ describe('Moneta API auth + learning flow', () => {
 
     const now = Date.now();
     await repository.upsertUserProfile({
-      userId: 'review-user',
+      userId,
       currentLevel: 'F2',
       streakDays: 2,
       entitlement: createDefaultEntitlement(),
@@ -454,7 +453,7 @@ describe('Moneta API auth + learning flow', () => {
     });
 
     const response = await request(app)
-      .get('/api/learn/today/review-user')
+      .get(`/api/learn/today/${userId}`)
       .set('Authorization', `Bearer ${login.body.accessToken as string}`);
 
     expect(response.status).toBe(200);
@@ -465,16 +464,16 @@ describe('Moneta API auth + learning flow', () => {
   });
 
   it('exports account data and supports authenticated account deletion', async () => {
-    const { app, accessToken } = await buildAuthedApp();
+    const { app, accessToken, userId } = await buildAuthedApp();
 
     const exported = await request(app)
       .get('/api/auth/account/export')
       .set('Authorization', `Bearer ${accessToken}`);
 
     expect(exported.status).toBe(200);
-    expect(exported.body.userId).toBe('demo-user');
+    expect(exported.body.userId).toBe(userId);
     expect(exported.body.email).toBe('demo@example.com');
-    expect(exported.body.profile.userId).toBe('demo-user');
+    expect(exported.body.profile.userId).toBe(userId);
 
     const invalidDelete = await request(app)
       .delete('/api/auth/account')
@@ -498,16 +497,16 @@ describe('Moneta API auth + learning flow', () => {
     expect(loginAfterDelete.status).toBe(401);
 
     const progressAfterDelete = await request(app)
-      .get('/api/progress/demo-user')
+      .get(`/api/progress/${userId}`)
       .set('Authorization', `Bearer ${accessToken}`);
     expect(progressAfterDelete.status).toBe(404);
   });
 
   it('returns free entitlements by default and upgrades on sync', async () => {
-    const { app, accessToken } = await buildAuthedApp();
+    const { app, accessToken, userId } = await buildAuthedApp();
 
     const initial = await request(app)
-      .get('/api/billing/entitlements/demo-user')
+      .get(`/api/billing/entitlements/${userId}`)
       .set('Authorization', `Bearer ${accessToken}`);
 
     expect(initial.status).toBe(200);
@@ -550,11 +549,11 @@ describe('Moneta API auth + learning flow', () => {
   it('limits due reviews for free users and unlocks full queue for pro users', async () => {
     const { app, repository } = buildApp();
 
-    await request(app).post('/api/auth/register').send({
-      userId: 'paywall-user',
+    const register = await request(app).post('/api/auth/register').send({
       email: 'paywall-user@example.com',
       password: 'password123'
     });
+    const userId = register.body.userId as string;
 
     const login = await request(app).post('/api/auth/login').send({
       email: 'paywall-user@example.com',
@@ -563,7 +562,7 @@ describe('Moneta API auth + learning flow', () => {
 
     const now = Date.now();
     await repository.upsertUserProfile({
-      userId: 'paywall-user',
+      userId,
       currentLevel: 'F2',
       streakDays: 2,
       entitlement: createDefaultEntitlement(),
@@ -577,7 +576,7 @@ describe('Moneta API auth + learning flow', () => {
     });
 
     const freeToday = await request(app)
-      .get('/api/learn/today/paywall-user')
+      .get(`/api/learn/today/${userId}`)
       .set('Authorization', `Bearer ${login.body.accessToken as string}`);
 
     expect(freeToday.status).toBe(200);
@@ -598,7 +597,7 @@ describe('Moneta API auth + learning flow', () => {
     expect(sync.status).toBe(200);
 
     const proToday = await request(app)
-      .get('/api/learn/today/paywall-user')
+      .get(`/api/learn/today/${userId}`)
       .set('Authorization', `Bearer ${login.body.accessToken as string}`);
 
     expect(proToday.status).toBe(200);
@@ -610,15 +609,15 @@ describe('Moneta API auth + learning flow', () => {
   it('reconciles billing webhooks with signature validation and idempotency', async () => {
     const { app } = buildApp();
 
-    await request(app).post('/api/auth/register').send({
-      userId: 'webhook-user',
+    const register = await request(app).post('/api/auth/register').send({
       email: 'webhook-user@example.com',
       password: 'password123'
     });
+    const userId = register.body.userId as string;
 
     const eventPayload = {
       eventId: 'evt_billing_001',
-      userId: 'webhook-user',
+      userId,
       platform: 'ios',
       productId: 'moneta.pro.monthly',
       isActive: true,
@@ -658,11 +657,11 @@ describe('Moneta API auth + learning flow', () => {
   it('rejects billing webhooks with invalid signatures', async () => {
     const { app } = buildApp();
 
-    await request(app).post('/api/auth/register').send({
-      userId: 'bad-sig-user',
+    const register = await request(app).post('/api/auth/register').send({
       email: 'bad-sig@example.com',
       password: 'password123'
     });
+    const userId = register.body.userId as string;
 
     const response = await request(app)
       .post('/api/billing/webhooks/reconcile')
@@ -671,7 +670,7 @@ describe('Moneta API auth + learning flow', () => {
       .set('x-billing-timestamp', '123')
       .send(JSON.stringify({
         eventId: 'evt_bad_sig',
-        userId: 'bad-sig-user',
+        userId,
         platform: 'ios',
         productId: 'moneta.pro.monthly',
         isActive: true

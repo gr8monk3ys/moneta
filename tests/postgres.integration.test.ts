@@ -37,12 +37,13 @@ describe.skipIf(!runIntegration)('Postgres integration', () => {
 
   it('persists auth and profile flows in postgres', async () => {
     const register = await request(app).post('/api/auth/register').send({
-      userId: 'pg-user',
       email: 'pg-user@example.com',
       password: 'password123'
     });
 
     expect(register.status).toBe(201);
+    const userId = register.body.userId as string;
+    expect(userId).toBeTruthy();
 
     const login = await request(app).post('/api/auth/login').send({
       email: 'pg-user@example.com',
@@ -60,7 +61,7 @@ describe.skipIf(!runIntegration)('Postgres integration', () => {
     expect(placement.status).toBe(200);
 
     const progress = await request(app)
-      .get('/api/progress/pg-user')
+      .get(`/api/progress/${userId}`)
       .set('Authorization', `Bearer ${login.body.accessToken as string}`);
 
     expect(progress.status).toBe(200);
@@ -69,7 +70,6 @@ describe.skipIf(!runIntegration)('Postgres integration', () => {
 
   it('deletes account lifecycle data in postgres', async () => {
     await request(app).post('/api/auth/register').send({
-      userId: 'pg-delete-user',
       email: 'pg-delete-user@example.com',
       password: 'password123'
     });

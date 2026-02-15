@@ -17,19 +17,19 @@ curl -fsS "$BASE_URL/ready"
 ## Register + login
 
 ```bash
-USER_ID="smoke-$(date +%s)"
-EMAIL="$USER_ID@example.com"
+EMAIL="smoke-$(date +%s)@example.com"
 PASSWORD="password123"
 
 curl -fsS -X POST "$BASE_URL/api/auth/register" \
   -H 'content-type: application/json' \
-  -d "{\"userId\":\"$USER_ID\",\"email\":\"$EMAIL\",\"password\":\"$PASSWORD\"}"
+  -d "{\"email\":\"$EMAIL\",\"password\":\"$PASSWORD\"}"
 
 TOKENS_JSON="$(curl -fsS -X POST "$BASE_URL/api/auth/login" \
   -H 'content-type: application/json' \
   -d "{\"email\":\"$EMAIL\",\"password\":\"$PASSWORD\"}")"
 
 echo "$TOKENS_JSON" | jq .
+USER_ID="$(echo "$TOKENS_JSON" | jq -r .userId)"
 ACCESS_TOKEN="$(echo "$TOKENS_JSON" | jq -r .accessToken)"
 REFRESH_TOKEN="$(echo "$TOKENS_JSON" | jq -r .refreshToken)"
 ```
@@ -57,4 +57,3 @@ curl -fsS -X POST "$BASE_URL/api/auth/logout" \
   -H 'content-type: application/json' \
   -d "{\"refreshToken\":\"$REFRESH_TOKEN\"}" | jq .
 ```
-

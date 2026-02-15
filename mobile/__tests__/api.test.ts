@@ -100,7 +100,7 @@ describe('mobile api auth retry', () => {
         return { ok: true, json: async () => ({ status: 'ready' }) } as Response;
       }
       if (url.endsWith('/api/auth/register')) {
-        return { ok: true, json: async () => ({}) } as Response;
+        return { ok: true, json: async () => ({ userId: 'user-1', email: 'x@example.com' }) } as Response;
       }
       if (url.endsWith('/api/auth/logout')) {
         return { ok: true, json: async () => ({}) } as Response;
@@ -218,7 +218,7 @@ describe('mobile api auth retry', () => {
     });
 
     expect(await probeBackend()).toEqual({ health: 'ok', ready: 'ready' });
-    await register({ userId: 'user-1', email: 'x@example.com', password: 'password123' });
+    await register({ email: 'x@example.com', password: 'password123' });
     await logout('refresh-token');
 
     const auth: AuthContext = {

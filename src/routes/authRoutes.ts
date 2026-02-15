@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import type express from 'express';
 import type { Request, Response } from 'express';
 import type { RateLimitRequestHandler } from 'express-rate-limit';
@@ -20,8 +21,7 @@ import type { RouteDeps } from './types.js';
 
 const registerSchema = z.object({
   email: z.email(),
-  password: z.string().min(8),
-  userId: z.string().min(1)
+  password: z.string().min(8)
 });
 
 const loginSchema = z.object({
@@ -61,13 +61,14 @@ async function registerHandler(req: Request, res: Response, deps: RouteDeps): Pr
     throw new ApiError(400, 'Invalid register payload', parsed.error.flatten());
   }
 
-  const { email, password, userId } = parsed.data;
+  const { email, password } = parsed.data;
   const normalizedEmail = email.toLowerCase();
   const existing = await deps.repository.getAuthUserByEmail(normalizedEmail);
   if (existing) {
     throw new ApiError(409, 'Email already registered');
   }
 
+  const userId = crypto.randomUUID();
   const passwordHash = await hashPassword(password);
   await deps.repository.createAuthUser({ userId, email: normalizedEmail, passwordHash });
   await deps.repository.upsertUserProfile({

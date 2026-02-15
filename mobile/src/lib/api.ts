@@ -296,8 +296,8 @@ export async function probeBackend(): Promise<{ health: string; ready: string }>
   return { health: health.status, ready: ready.status };
 }
 
-export async function register(payload: { userId: string; email: string; password: string }): Promise<void> {
-  await postJson('/api/auth/register', payload);
+export async function register(payload: { email: string; password: string }): Promise<{ userId: string; email: string }> {
+  return postJson<{ userId: string; email: string }>('/api/auth/register', payload);
 }
 
 export async function login(payload: AuthPayload): Promise<AuthResponse> {

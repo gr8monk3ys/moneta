@@ -45,7 +45,7 @@ export function LoginScreen(props: { onAuthenticated: (auth: AuthResult) => void
     setError(null);
 
     try {
-      await register({ userId: 'demo-user', email, password });
+      await register({ email, password });
       await signIn();
     } catch (err) {
       setError((err as Error).message);

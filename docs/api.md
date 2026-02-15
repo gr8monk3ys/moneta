@@ -17,6 +17,12 @@ Prometheus metrics endpoint. In production, requires `Authorization: Bearer <MET
 
 ### `POST /api/auth/register`
 Registers a user with email/password and initializes their finance profile.
+- Body:
+  - `email`
+  - `password`
+- Response:
+  - `userId`
+  - `email`
 
 ### `POST /api/auth/login`
 Returns an access token and refresh token.
