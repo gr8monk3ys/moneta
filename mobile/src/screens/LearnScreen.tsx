@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchLearningPath, fetchToday, syncEntitlement, type AuthContext, type PathLesson } from '../lib/api';
+import { openLegalDoc, type LegalDocKey } from '../lib/legal';
 import { queryKeys } from '../lib/queryKeys';
-import { disconnectStoreBilling, listSubscriptionProducts, purchasePrimarySubscription } from '../lib/storeBilling';
+import { disconnectStoreBilling, listSubscriptionProducts, purchasePrimarySubscription, restoreLatestSubscription } from '../lib/storeBilling';
 import { theme } from '../lib/theme';
 
 interface LearnScreenProps {
@@ -21,6 +22,7 @@ export function LearnScreen(props: LearnScreenProps) {
   const [priceLabel, setPriceLabel] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
+  const [billingBusy, setBillingBusy] = useState(false);
 
   const todayQuery = useQuery({
     queryKey: queryKeys.today(props.userId),
@@ -49,11 +51,36 @@ export function LearnScreen(props: LearnScreenProps) {
     };
   }, [loadCatalog]);
 
+  async function handleOpenLegal(doc: LegalDocKey) {
+    const result = await openLegalDoc(doc);
+    if (!result.opened && result.error) {
+      setError(result.error);
+    }
+  }
+
+  async function openManageSubscriptions() {
+    setStatus(null);
+    setError(null);
+
+    const url = Platform.OS === 'ios'
+      ? 'https://apps.apple.com/account/subscriptions'
+      : 'https://play.google.com/store/account/subscriptions';
+
+    const canOpen = await Linking.canOpenURL(url);
+    if (!canOpen) {
+      setError('This device cannot open subscription settings.');
+      return;
+    }
+
+    await Linking.openURL(url);
+  }
+
   async function upgradeToPro() {
     setStatus(null);
     setError(null);
 
     try {
+      setBillingBusy(true);
       const purchase = await purchasePrimarySubscription(props.userId);
       await syncEntitlement(props.auth, {
         platform: purchase.platform,
@@ -67,6 +94,37 @@ export function LearnScreen(props: LearnScreenProps) {
       ]);
     } catch (reason) {
       setError(formatError(reason));
+    } finally {
+      setBillingBusy(false);
+    }
+  }
+
+  async function restorePurchases() {
+    setStatus(null);
+    setError(null);
+
+    try {
+      setBillingBusy(true);
+      const restored = await restoreLatestSubscription();
+      if (!restored) {
+        setStatus('No active subscription was found to restore.');
+        return;
+      }
+
+      await syncEntitlement(props.auth, {
+        platform: restored.platform,
+        productId: restored.productId,
+        purchaseToken: restored.purchaseToken
+      });
+      setStatus(restored.sandbox ? 'Moneta Pro restored (sandbox mode).' : 'Moneta Pro restored.');
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.today(props.userId) }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.learningPath(props.userId) })
+      ]);
+    } catch (reason) {
+      setError(formatError(reason));
+    } finally {
+      setBillingBusy(false);
     }
   }
 
@@ -76,7 +134,7 @@ export function LearnScreen(props: LearnScreenProps) {
   const nextLesson = today?.nextLesson?.title ?? null;
   const advancedTracksUnlocked = Boolean(today?.features?.advancedTracks);
   const planLabel = today?.entitlement?.plan === 'pro' ? 'Pro' : 'Free';
-  const loading = todayQuery.isPending || pathQuery.isPending;
+  const loading = billingBusy || todayQuery.isPending || pathQuery.isPending;
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -94,8 +152,30 @@ export function LearnScreen(props: LearnScreenProps) {
             Includes investing, retirement, and certificates.
             {priceLabel ? ` Current plan: ${priceLabel}.` : ''}
           </Text>
+          <Text style={styles.paywallFinePrint}>
+            Auto-renewing subscription. Cancel anytime in your App Store / Google Play settings.
+          </Text>
+          <View style={styles.paywallLinks}>
+            <Pressable onPress={() => handleOpenLegal('subscription')}>
+              <Text style={styles.paywallLink}>Subscription Terms</Text>
+            </Pressable>
+            <Text style={styles.paywallLinkDivider}>•</Text>
+            <Pressable onPress={() => handleOpenLegal('privacy')}>
+              <Text style={styles.paywallLink}>Privacy</Text>
+            </Pressable>
+            <Text style={styles.paywallLinkDivider}>•</Text>
+            <Pressable onPress={() => handleOpenLegal('terms')}>
+              <Text style={styles.paywallLink}>Terms</Text>
+            </Pressable>
+          </View>
           <Pressable style={styles.paywallButton} onPress={upgradeToPro} disabled={loading}>
             <Text style={styles.paywallButtonText}>Upgrade to Pro</Text>
+          </Pressable>
+          <Pressable style={styles.paywallSecondaryButton} onPress={restorePurchases} disabled={loading}>
+            <Text style={styles.paywallSecondaryText}>Restore Purchases</Text>
+          </Pressable>
+          <Pressable style={styles.paywallSecondaryButton} onPress={openManageSubscriptions} disabled={loading}>
+            <Text style={styles.paywallSecondaryText}>Manage Subscription</Text>
           </Pressable>
         </View>
       ) : null}
@@ -139,8 +219,14 @@ const styles = StyleSheet.create({
   paywall: { borderWidth: 1, borderColor: theme.accent, backgroundColor: theme.cardElevated, borderRadius: 14, padding: 14, gap: 8 },
   paywallTitle: { color: theme.textPrimary, fontWeight: '700' },
   paywallBody: { color: theme.textMuted },
+  paywallFinePrint: { color: theme.textMuted, fontSize: 12 },
+  paywallLinks: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8 },
+  paywallLink: { color: theme.textMuted, textDecorationLine: 'underline', fontSize: 12 },
+  paywallLinkDivider: { color: theme.textMuted, fontSize: 12 },
   paywallButton: { backgroundColor: theme.accent, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 12 },
   paywallButtonText: { color: '#1a1d24', textAlign: 'center', fontWeight: '700' },
+  paywallSecondaryButton: { borderRadius: 10, paddingVertical: 10, paddingHorizontal: 12, borderWidth: 1, borderColor: '#2f3440' },
+  paywallSecondaryText: { color: theme.textPrimary, textAlign: 'center', fontWeight: '700' },
   node: { backgroundColor: theme.card, borderRadius: 14, padding: 14 },
   activeNode: { borderColor: theme.accent, borderWidth: 1, backgroundColor: '#2d2620' },
   completedNode: { borderWidth: 1, borderColor: theme.success },
