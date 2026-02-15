@@ -11,7 +11,7 @@ interface AuthResult {
   sessionId: string;
 }
 
-export function LoginScreen(props: { onAuthenticated: (auth: AuthResult) => void }) {
+export function LoginScreen(props: { onAuthenticated: (auth: AuthResult) => void; onForgotPassword?: (email: string) => void }) {
   const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
   const [email, setEmail] = useState(isDev ? 'demo@example.com' : '');
   const [password, setPassword] = useState(isDev ? 'password123' : '');
@@ -80,6 +80,12 @@ export function LoginScreen(props: { onAuthenticated: (auth: AuthResult) => void
         <Text style={styles.secondaryText}>Create Account</Text>
       </Pressable>
 
+      {props.onForgotPassword ? (
+        <Pressable onPress={() => props.onForgotPassword?.(email)} disabled={loading}>
+          <Text style={styles.forgotLink}>Forgot password?</Text>
+        </Pressable>
+      ) : null}
+
       <View style={styles.legalRow}>
         <Pressable onPress={() => handleOpenLegal('privacy')}>
           <Text style={styles.legalLink}>Privacy Policy</Text>
@@ -112,6 +118,7 @@ const styles = StyleSheet.create({
   primaryText: { textAlign: 'center', color: '#1a1d24', fontWeight: '700' },
   secondaryButton: { borderRadius: 12, padding: 14, borderWidth: 1, borderColor: '#2f3440' },
   secondaryText: { textAlign: 'center', color: theme.textPrimary, fontWeight: '600' },
+  forgotLink: { color: theme.textMuted, textAlign: 'center', textDecorationLine: 'underline' },
   legalRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 6 },
   legalLink: { color: theme.textMuted, textDecorationLine: 'underline' },
   legalDivider: { color: theme.textMuted },

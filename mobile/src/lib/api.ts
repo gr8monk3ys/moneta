@@ -169,11 +169,11 @@ export interface AccountExportResponse {
     active: number;
     refreshTokens: Array<{
       tokenId: string;
-      userId: string;
       sessionId: string;
       createdAt: string;
       expiresAt: string;
       revokedAt?: string;
+      isActive: boolean;
     }>;
   };
   billing: {
@@ -302,6 +302,14 @@ export async function register(payload: { email: string; password: string }): Pr
 
 export async function login(payload: AuthPayload): Promise<AuthResponse> {
   return postJson<AuthResponse>('/api/auth/login', payload);
+}
+
+export async function requestPasswordReset(payload: { email: string }): Promise<{ success: boolean }> {
+  return postJson<{ success: boolean }>('/api/auth/password/reset/request', payload);
+}
+
+export async function confirmPasswordReset(payload: { email: string; code: string; newPassword: string }): Promise<{ success: boolean }> {
+  return postJson<{ success: boolean }>('/api/auth/password/reset/confirm', payload);
 }
 
 export async function refresh(refreshToken: string): Promise<AuthResponse> {

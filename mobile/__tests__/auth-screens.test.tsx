@@ -2,6 +2,8 @@ import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import { HomeScreen } from '../src/screens/HomeScreen';
 import { LearnScreen } from '../src/screens/LearnScreen';
 import { LoginScreen } from '../src/screens/LoginScreen';
+import { PasswordResetConfirmScreen } from '../src/screens/PasswordResetConfirmScreen';
+import { PasswordResetRequestScreen } from '../src/screens/PasswordResetRequestScreen';
 import { ProfileScreen } from '../src/screens/ProfileScreen';
 import * as api from '../src/lib/api';
 import * as storeBilling from '../src/lib/storeBilling';
@@ -11,6 +13,8 @@ jest.mock('../src/lib/api', () => ({
   ...jest.requireActual('../src/lib/api'),
   login: jest.fn(),
   register: jest.fn(),
+  requestPasswordReset: jest.fn(),
+  confirmPasswordReset: jest.fn(),
   fetchProgress: jest.fn(),
   fetchToday: jest.fn(),
   fetchLearningPath: jest.fn(),
@@ -135,6 +139,8 @@ describe('mobile auth-driven screens', () => {
       deleted: true,
       deletedAt: new Date().toISOString()
     });
+    (api.requestPasswordReset as jest.Mock).mockResolvedValue({ success: true });
+    (api.confirmPasswordReset as jest.Mock).mockResolvedValue({ success: true });
   });
 
   afterEach(() => {
@@ -439,5 +445,40 @@ describe('mobile auth-driven screens', () => {
       expect(api.deleteAccount).toHaveBeenCalledWith(auth);
       expect(onLogout).toHaveBeenCalled();
     });
+  });
+
+  it('requests password reset code and navigates to confirmation', async () => {
+    const navigation = { goBack: jest.fn(), navigate: jest.fn() } as any;
+    const route = { key: 'PasswordResetRequest', name: 'PasswordResetRequest', params: { email: 'reset@example.com' } } as any;
+    const screen = render(<PasswordResetRequestScreen navigation={navigation} route={route} />);
+
+    fireEvent.press(screen.getByText('Send Reset Code'));
+
+    await waitFor(() => {
+      expect(api.requestPasswordReset).toHaveBeenCalledWith({ email: 'reset@example.com' });
+      expect(navigation.navigate).toHaveBeenCalledWith('PasswordResetConfirm', { email: 'reset@example.com' });
+    });
+  });
+
+  it('confirms password reset code and returns to sign in', async () => {
+    const navigation = { goBack: jest.fn(), popToTop: jest.fn() } as any;
+    const route = { key: 'PasswordResetConfirm', name: 'PasswordResetConfirm', params: { email: 'reset@example.com' } } as any;
+    const screen = render(<PasswordResetConfirmScreen navigation={navigation} route={route} />);
+
+    fireEvent.changeText(screen.getByPlaceholderText('8-digit code'), '12345678');
+    fireEvent.changeText(screen.getByPlaceholderText('New password'), 'newpassword123');
+    fireEvent.press(screen.getByText('Reset Password'));
+
+    await waitFor(() => {
+      expect(api.confirmPasswordReset).toHaveBeenCalledWith({
+        email: 'reset@example.com',
+        code: '12345678',
+        newPassword: 'newpassword123'
+      });
+      expect(screen.getByText('Password updated. You can sign in now.')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByText('Back to Sign In'));
+    expect(navigation.popToTop).toHaveBeenCalled();
   });
 });

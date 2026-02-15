@@ -1,5 +1,7 @@
 export type AuthStackParamList = {
   Login: undefined;
+  PasswordResetRequest: { email?: string } | undefined;
+  PasswordResetConfirm: { email?: string } | undefined;
 };
 
 export type MainTabParamList = {
@@ -14,4 +16,3 @@ export type AppStackParamList = {
   LessonPlayer: { lessonId: string };
   ReviewPlayer: undefined;
 };
-
