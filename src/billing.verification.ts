@@ -263,40 +263,35 @@ async function postForm<T>(url: string, body: URLSearchParams, timeoutMs: number
   }
 }
 
-function parseAppleExpiry(transactions: AppleReceiptTransaction[], productId: string): { active: boolean; currentPeriodEndsAt?: string; transactionId?: string } {
-  const nowMs = Date.now();
-  const matching = transactions.filter((transaction) => transaction.product_id === productId);
-  const relevant = matching.length > 0 ? matching : transactions;
-
+function parseAppleExpiry(
+  transactions: AppleReceiptTransaction[],
+  now: Date
+): { active: boolean; currentPeriodEndsAt: string; transactionId?: string } | null {
   let latest: AppleReceiptTransaction | undefined;
-  let latestExpiryMs = 0;
+  let latestExpiryMs: number | undefined;
 
-  for (const transaction of relevant) {
-    const expiryMs = Number(transaction.expires_date_ms ?? '0');
-    if (Number.isFinite(expiryMs) && expiryMs >= latestExpiryMs) {
+  for (const transaction of transactions) {
+    const expiryMs = Number(transaction.expires_date_ms ?? '');
+    if (!Number.isFinite(expiryMs) || expiryMs <= 0) {
+      continue;
+    }
+
+    if (latestExpiryMs === undefined || expiryMs >= latestExpiryMs) {
       latest = transaction;
       latestExpiryMs = expiryMs;
     }
   }
 
-  if (!latest) {
-    return { active: false };
+  if (!latest || latestExpiryMs === undefined) {
+    return null;
   }
 
-  if (latest.cancellation_date_ms) {
-    return { active: false };
-  }
-
-  if (latestExpiryMs > 0) {
-    return {
-      active: latestExpiryMs > nowMs,
-      currentPeriodEndsAt: new Date(latestExpiryMs).toISOString(),
-      transactionId: latest.transaction_id
-    };
-  }
+  const currentPeriodEndsAt = new Date(latestExpiryMs).toISOString();
+  const active = !latest.cancellation_date_ms && latestExpiryMs > now.getTime();
 
   return {
-    active: true,
+    active,
+    currentPeriodEndsAt,
     transactionId: latest.transaction_id
   };
 }
@@ -348,7 +343,16 @@ async function verifyApplePurchase(
     throw new ApiError(402, 'Apple purchase could not be verified');
   }
 
-  const parsed = parseAppleExpiry(transactions, input.productId);
+  const matchingTransactions = transactions.filter((transaction) => transaction.product_id === input.productId);
+  if (matchingTransactions.length === 0) {
+    throw new ApiError(402, 'Apple purchase did not match product');
+  }
+
+  const parsed = parseAppleExpiry(matchingTransactions, now);
+  if (!parsed) {
+    throw new ApiError(402, 'Apple subscription receipt was missing an expiry');
+  }
+
   return {
     source: 'ios',
     productId: input.productId,
@@ -456,19 +460,26 @@ async function verifyGooglePurchase(
     clearTimeout(timeout);
   }
 
-  const lineItem = (purchase.lineItems ?? []).find((item) => item.productId === input.productId)
-    ?? purchase.lineItems?.[0];
-  const expiryMs = lineItem?.expiryTime ? Date.parse(lineItem.expiryTime) : NaN;
-  const hasExpiry = Number.isFinite(expiryMs);
+  const lineItems = purchase.lineItems ?? [];
+  const lineItem = lineItems.find((item) => item.productId === input.productId);
+  if (!lineItem) {
+    throw new ApiError(402, 'Google Play purchase did not match product');
+  }
+
+  const expiryMs = lineItem.expiryTime ? Date.parse(lineItem.expiryTime) : NaN;
+  if (!Number.isFinite(expiryMs)) {
+    throw new ApiError(402, 'Google Play purchase was missing a valid expiry');
+  }
+
   const isStateActive = purchase.subscriptionState === 'SUBSCRIPTION_STATE_ACTIVE'
     || purchase.subscriptionState === 'SUBSCRIPTION_STATE_IN_GRACE_PERIOD';
-  const isActive = isStateActive && (!hasExpiry || expiryMs > now.getTime());
+  const isActive = isStateActive && expiryMs > now.getTime();
 
   return {
     source: 'android',
     productId: input.productId,
     isActive,
-    currentPeriodEndsAt: hasExpiry ? new Date(expiryMs).toISOString() : undefined,
+    currentPeriodEndsAt: new Date(expiryMs).toISOString(),
     verificationReference: purchase.latestOrderId
   };
 }
