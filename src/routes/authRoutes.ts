@@ -170,6 +170,19 @@ async function exportAccountHandler(req: AuthenticatedRequest, res: Response, de
     throw new ApiError(404, 'User not found');
   }
 
+  const nowMs = Date.now();
+  const sessionTokens = refreshTokens.map((token) => {
+    const isActive = !token.revokedAt && new Date(token.expiresAt).getTime() > nowMs;
+    return {
+      tokenId: token.tokenId,
+      sessionId: token.sessionId,
+      createdAt: token.createdAt,
+      expiresAt: token.expiresAt,
+      revokedAt: token.revokedAt,
+      isActive
+    };
+  });
+
   res.status(200).json({
     userId,
     email,
@@ -177,8 +190,8 @@ async function exportAccountHandler(req: AuthenticatedRequest, res: Response, de
     profile,
     sessions: {
       total: refreshTokens.length,
-      active: refreshTokens.filter((token) => !token.revokedAt && new Date(token.expiresAt).getTime() > Date.now()).length,
-      refreshTokens
+      active: sessionTokens.filter((token) => token.isActive).length,
+      refreshTokens: sessionTokens
     },
     billing: {
       webhookEventsProcessed: billingEvents.length,

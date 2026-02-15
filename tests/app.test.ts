@@ -474,6 +474,11 @@ describe('Moneta API auth + learning flow', () => {
     expect(exported.body.userId).toBe(userId);
     expect(exported.body.email).toBe('demo@example.com');
     expect(exported.body.profile.userId).toBe(userId);
+    expect(exported.body.sessions.total).toBeGreaterThan(0);
+    expect(exported.body.sessions.refreshTokens).toHaveLength(exported.body.sessions.total);
+    const sessionToken = exported.body.sessions.refreshTokens[0] as Record<string, unknown>;
+    expect('tokenHash' in sessionToken).toBe(false);
+    expect('userId' in sessionToken).toBe(false);
 
     const invalidDelete = await request(app)
       .delete('/api/auth/account')
