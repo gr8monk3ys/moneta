@@ -1,5 +1,18 @@
 const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env;
-const baseUrl = env?.EXPO_PUBLIC_API_BASE_URL ?? 'http://localhost:3000';
+
+function resolveApiBaseUrl(): string {
+  const configured = env?.EXPO_PUBLIC_API_BASE_URL?.trim();
+  const normalized = configured && configured.length > 0 ? configured.replace(/\/$/, '') : 'http://localhost:3000';
+
+  const isReactNativeRuntime = typeof navigator !== 'undefined' && navigator.product === 'ReactNative';
+  if (isReactNativeRuntime && normalized.includes('localhost')) {
+    console.warn('EXPO_PUBLIC_API_BASE_URL uses localhost. Use your LAN IP for physical devices.');
+  }
+
+  return normalized;
+}
+
+const baseUrl = resolveApiBaseUrl();
 
 interface AuthPayload {
   email: string;
