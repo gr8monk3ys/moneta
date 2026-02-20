@@ -2,12 +2,14 @@ import path from 'node:path';
 import { Pool } from 'pg';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { createWebhookSignature } from '../src/billing.verification.js';
 import { createApp } from '../src/app.js';
 import { MigrationRunner } from '../src/migrations.js';
 import { PostgresUserRepository } from '../src/repository.postgres.js';
 
 const databaseUrl = process.env.DATABASE_URL;
 const runIntegration = Boolean(databaseUrl);
+const webhookSecret = 'dev-billing-webhook-secret';
 
 describe.skipIf(!runIntegration)('Postgres integration', () => {
   const pool = new Pool({ connectionString: databaseUrl });
@@ -95,5 +97,109 @@ describe.skipIf(!runIntegration)('Postgres integration', () => {
       password: 'password123'
     });
     expect(relogin.status).toBe(401);
+  });
+
+  it('enforces user-resource isolation in postgres mode', async () => {
+    await request(app).post('/api/auth/register').send({
+      userId: 'pg-user-a',
+      email: 'pg-user-a@example.com',
+      password: 'password123'
+    });
+
+    await request(app).post('/api/auth/register').send({
+      userId: 'pg-user-b',
+      email: 'pg-user-b@example.com',
+      password: 'password123'
+    });
+
+    const loginA = await request(app).post('/api/auth/login').send({
+      email: 'pg-user-a@example.com',
+      password: 'password123'
+    });
+
+    const forbidden = await request(app)
+      .get('/api/progress/pg-user-b')
+      .set('Authorization', `Bearer ${loginA.body.accessToken as string}`);
+
+    expect(forbidden.status).toBe(403);
+  });
+
+  it('persists billing entitlement sync outcomes in postgres mode', async () => {
+    await request(app).post('/api/auth/register').send({
+      userId: 'pg-billing-user',
+      email: 'pg-billing-user@example.com',
+      password: 'password123'
+    });
+
+    const login = await request(app).post('/api/auth/login').send({
+      email: 'pg-billing-user@example.com',
+      password: 'password123'
+    });
+
+    const sync = await request(app)
+      .post('/api/billing/entitlements/sync')
+      .set('Authorization', `Bearer ${login.body.accessToken as string}`)
+      .send({
+        platform: 'ios',
+        productId: 'moneta.pro.monthly',
+        purchaseToken: 'sandbox-pg-webhook-12345'
+      });
+
+    expect(sync.status).toBe(200);
+
+    const entitlements = await request(app)
+      .get('/api/billing/entitlements/pg-billing-user')
+      .set('Authorization', `Bearer ${login.body.accessToken as string}`);
+
+    expect(entitlements.status).toBe(200);
+    expect(entitlements.body.entitlement.plan).toBe('pro');
+  });
+
+  it('handles webhook replay idempotency and persists only one processed event', async () => {
+    await request(app).post('/api/auth/register').send({
+      userId: 'pg-webhook-user',
+      email: 'pg-webhook-user@example.com',
+      password: 'password123'
+    });
+
+    const payload = {
+      eventId: 'pg-webhook-event-1',
+      userId: 'pg-webhook-user',
+      platform: 'ios',
+      productId: 'moneta.pro.monthly',
+      isActive: true,
+      currentPeriodEndsAt: new Date(Date.now() + 86_400_000).toISOString()
+    };
+
+    const rawBody = Buffer.from(JSON.stringify(payload));
+    const timestamp = String(Math.floor(Date.now() / 1000));
+    const signature = createWebhookSignature(webhookSecret, rawBody, timestamp);
+
+    const first = await request(app)
+      .post('/api/billing/webhooks/reconcile')
+      .set('Content-Type', 'application/json')
+      .set('x-billing-signature', signature)
+      .set('x-billing-timestamp', timestamp)
+      .send(rawBody.toString());
+
+    expect(first.status).toBe(200);
+    expect(first.body.duplicate).toBe(false);
+    expect(first.body.processed).toBe(true);
+
+    const replay = await request(app)
+      .post('/api/billing/webhooks/reconcile')
+      .set('Content-Type', 'application/json')
+      .set('x-billing-signature', signature)
+      .set('x-billing-timestamp', timestamp)
+      .send(rawBody.toString());
+
+    expect(replay.status).toBe(200);
+    expect(replay.body.duplicate).toBe(true);
+    expect(replay.body.processed).toBe(false);
+
+    const count = await pool.query<{ count: string }>('SELECT COUNT(*)::text AS count FROM billing_webhook_events WHERE event_id = $1', [
+      payload.eventId
+    ]);
+    expect(Number(count.rows[0].count)).toBe(1);
   });
 });
