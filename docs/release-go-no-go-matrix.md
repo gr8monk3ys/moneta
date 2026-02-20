@@ -16,7 +16,8 @@ A release is **Go** only when all P0 gates are Pass.
 | Backend quality | CI `quality` job passes (lint, coverage tests, DB integration, build, audit). | CI link + logs | Backend owner | ☐ |
 | Mobile quality | CI `mobile-quality` job passes (lint, coverage tests, audit). | CI link + logs | Mobile owner | ☐ |
 | Backend E2E smoke | CI E2E smoke step passes (`npm run test:e2e`). | CI link + test output | QA owner | ☐ |
-| Final verification gate | `./scripts/final-verification-gate.sh` passes in release-like env. | Gate output artifact | Release manager | ☐ |
+| Final verification gate | `./scripts/final-verification-gate.sh` passes in release-like env with `REQUIRE_HIGH_RELEASE_POLICY=true` and `MOBILE_AUDIT_LEVEL=high`. | Gate output artifact | Release manager | ☐ |
+| High release policy | Final gate logs confirm high policy enforcement is enabled and not overridden. | Final gate env + logs | Release manager | ☐ |
 | Production env readiness | `NODE_ENV=production ./scripts/production-readiness-check.sh` passes in target env. | Redacted env report + command output | SRE owner | ☐ |
 | Synthetic uptime | `npm run check:synthetic-uptime` passes against target deployment URL with metrics token. | Synthetic check output | SRE owner | ☐ |
 | Security posture | No high/critical unresolved audit findings for release commit. | Audit output + exception list (if any) | Security owner | ☐ |

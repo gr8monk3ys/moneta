@@ -108,6 +108,8 @@ jobs:
       DATABASE_URL: postgres://postgres:postgres@localhost:5432/moneta_test
       REQUIRE_INTEGRATION_TESTS: 'true'
       REQUIRE_BILLING_RELEASE_CONFIG: 'false'
+      REQUIRE_HIGH_RELEASE_POLICY: 'true'
+      MOBILE_AUDIT_LEVEL: 'high'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
