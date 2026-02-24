@@ -53,3 +53,5 @@ The following are generally out of scope unless chained to demonstrate real impa
 
 Never commit real credentials, API keys, or private tokens to this repository.
 Use environment variables and secret stores for runtime configuration.
+
+For private disclosure, use GitHub Security Advisories: [https://github.com/gr8monk3ys/moneta/security/advisories](https://github.com/gr8monk3ys/moneta/security/advisories).
