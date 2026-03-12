@@ -2112,18 +2112,7 @@ function sortLessons(a: Lesson, b: Lesson): number {
   return a.lessonId.localeCompare(b.lessonId);
 }
 
-export function listCurriculum(includePremium: boolean): Lesson[] {
-  return lessons
-    .filter((lesson) => includePremium || !lesson.premium)
-    .sort(sortLessons);
-}
-
-export function getLessonById(lessonId: string): Lesson | undefined {
-  return lessons.find((lesson) => lesson.lessonId === lessonId);
-}
-
-export function getNextLessonForLevel(level: Lesson['level'], includePremium: boolean): Lesson | undefined {
-  const curriculum = listCurriculum(includePremium);
+function getNextLessonForLevelFromCurriculum(curriculum: Lesson[], level: Lesson['level']): Lesson | undefined {
   const preferred = curriculum.find((lesson) => lesson.level === level);
   if (preferred) {
     return preferred;
@@ -2137,14 +2126,43 @@ export function getNextLessonForLevel(level: Lesson['level'], includePremium: bo
   return curriculum[0];
 }
 
+function getNextLessonForProgressFromCurriculum(user: UserProfile, curriculum: Lesson[]): Lesson | undefined {
+  return curriculum.find((lesson) => !isLessonCompleted(user, lesson.lessonId));
+}
+
+export function listCurriculum(includePremium: boolean): Lesson[] {
+  return lessons
+    .filter((lesson) => includePremium || !lesson.premium)
+    .sort(sortLessons);
+}
+
+export function getLessonById(lessonId: string): Lesson | undefined {
+  return lessons.find((lesson) => lesson.lessonId === lessonId);
+}
+
+export function getNextLessonForLevel(level: Lesson['level'], includePremium: boolean): Lesson | undefined {
+  return getNextLessonForLevelFromCurriculum(listCurriculum(includePremium), level);
+}
+
 export function isLessonCompleted(user: UserProfile, lessonId: string): boolean {
   return Boolean(user.completedLessons?.[lessonId]);
 }
 
 export function getNextLessonForProgress(user: UserProfile, includePremium: boolean): Lesson | undefined {
-  const curriculum = listCurriculum(includePremium);
-  return curriculum.find((lesson) => !isLessonCompleted(user, lesson.lessonId));
+  return getNextLessonForProgressFromCurriculum(user, listCurriculum(includePremium));
 }
+
+// Exposed for focused coverage of normalization and sorting branches that are hard to reach through public APIs.
+export const __testables = {
+  createLevelSeeds,
+  buildGeneratedItems,
+  normalizeMcqChoices,
+  withFallbackChoices,
+  lessonOrdinal,
+  sortLessons,
+  getNextLessonForLevelFromCurriculum,
+  getNextLessonForProgressFromCurriculum
+} as const;
 
 export const users: Record<string, UserProfile> = {
   demo: {

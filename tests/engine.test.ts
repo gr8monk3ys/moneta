@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createDefaultEntitlement } from '../src/billing.js';
-import { applyItemResult, markSessionActivity, placeUser } from '../src/engine.js';
+import { applyItemResult, isValidTimeZone, markSessionActivity, placeUser } from '../src/engine.js';
 import type { UserProfile } from '../src/types.js';
 
 function buildUser(overrides: Partial<UserProfile> = {}): UserProfile {
@@ -20,6 +20,8 @@ describe('engine', () => {
     expect(placeUser(4, 10)).toBe('F2');
     expect(placeUser(6, 10)).toBe('F3');
     expect(placeUser(8, 10)).toBe('F4');
+    expect(placeUser(9, 10)).toBe('F5');
+    expect(placeUser(10, 10)).toBe('F6');
   });
 
   it('updates skill mastery and schedules review item', () => {
@@ -34,6 +36,27 @@ describe('engine', () => {
     expect(user.skills.budgeting?.lastReviewedAt).toBeTruthy();
     expect(user.skills.budgeting?.nextReviewAt).toBeTruthy();
     expect(new Date(user.skills.budgeting?.nextReviewAt ?? '').getTime()).toBeGreaterThan(Date.now());
+  });
+
+  it('clamps mastery bounds and validates timezone identifiers', () => {
+    const cappedHigh = buildUser({
+      skills: {
+        investing: { skillId: 'investing', mastery: 0.96 }
+      }
+    });
+    applyItemResult(cappedHigh, 'investing', true);
+    expect(cappedHigh.skills.investing?.mastery).toBe(1);
+
+    const cappedLow = buildUser({
+      skills: {
+        budgeting: { skillId: 'budgeting', mastery: 0.01 }
+      }
+    });
+    applyItemResult(cappedLow, 'budgeting', false);
+    expect(cappedLow.skills.budgeting?.mastery).toBe(0);
+
+    expect(isValidTimeZone('America/Los_Angeles')).toBe(true);
+    expect(isValidTimeZone('Mars/OlympusMons')).toBe(false);
   });
 
   it('increments streak on consecutive days and resets after missed day', () => {

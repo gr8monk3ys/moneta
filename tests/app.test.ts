@@ -1,9 +1,12 @@
+import express from 'express';
 import request from 'supertest';
 import { describe, expect, it } from 'vitest';
 import { createDefaultEntitlement } from '../src/billing.js';
 import { createBillingVerifier, createWebhookSignature } from '../src/billing.verification.js';
 import { createApp } from '../src/app.js';
+import { listCurriculum } from '../src/data.js';
 import type { EmailService } from '../src/email.js';
+import { errorHandler } from '../src/middleware/errorHandler.js';
 import { InMemoryUserRepository } from '../src/repository.memory.js';
 
 async function sleep(ms: number): Promise<void> {
@@ -117,6 +120,59 @@ describe('Moneta API auth + learning flow', () => {
     expect(newLogin.status).toBe(200);
   });
 
+  it('handles password reset edge cases without leaking account existence', async () => {
+    const sent: Array<{ to: string; code: string; expiresAt: string }> = [];
+    const emailService: EmailService = {
+      sendPasswordResetCode: async (input) => {
+        sent.push(input);
+      }
+    };
+    const { app } = buildApp(3600, 604800, emailService);
+
+    await request(app).post('/api/auth/register').send({
+      email: 'reset-edge@example.com',
+      password: 'password123'
+    });
+
+    const invalidRequest = await request(app).post('/api/auth/password/reset/request').send({
+      email: 'not-an-email'
+    });
+    expect(invalidRequest.status).toBe(400);
+
+    const unknownEmail = await request(app).post('/api/auth/password/reset/request').send({
+      email: 'missing@example.com'
+    });
+    expect(unknownEmail.status).toBe(200);
+    expect(sent).toHaveLength(0);
+
+    const knownEmail = await request(app).post('/api/auth/password/reset/request').send({
+      email: 'reset-edge@example.com'
+    });
+    expect(knownEmail.status).toBe(200);
+    expect(sent).toHaveLength(1);
+
+    const invalidConfirmPayload = await request(app).post('/api/auth/password/reset/confirm').send({
+      email: 'reset-edge@example.com',
+      code: '123',
+      newPassword: 'short'
+    });
+    expect(invalidConfirmPayload.status).toBe(400);
+
+    const missingUserConfirm = await request(app).post('/api/auth/password/reset/confirm').send({
+      email: 'ghost@example.com',
+      code: '12345678',
+      newPassword: 'newpassword123'
+    });
+    expect(missingUserConfirm.status).toBe(401);
+
+    const wrongCode = await request(app).post('/api/auth/password/reset/confirm').send({
+      email: 'reset-edge@example.com',
+      code: '87654321',
+      newPassword: 'newpassword123'
+    });
+    expect(wrongCode.status).toBe(401);
+  });
+
   it('returns validation and conflict errors for register', async () => {
     const { app } = buildApp();
 
@@ -184,6 +240,24 @@ describe('Moneta API auth + learning flow', () => {
     const { app } = buildApp();
     const response = await request(app).post('/api/auth/refresh').send({ refreshToken: 'tiny' });
     expect(response.status).toBe(400);
+  });
+
+  it('supports logout and rejects invalid logout requests', async () => {
+    const { app, refreshToken } = await buildAuthedApp();
+
+    const invalidPayload = await request(app).post('/api/auth/logout').send({});
+    expect(invalidPayload.status).toBe(400);
+
+    const invalidToken = await request(app).post('/api/auth/logout').send({
+      refreshToken: 'x'.repeat(24)
+    });
+    expect(invalidToken.status).toBe(401);
+
+    const loggedOut = await request(app).post('/api/auth/logout').send({ refreshToken });
+    expect(loggedOut.status).toBe(200);
+
+    const refreshAfterLogout = await request(app).post('/api/auth/refresh').send({ refreshToken });
+    expect(refreshAfterLogout.status).toBe(401);
   });
 
   it('revokes all sessions for user', async () => {
@@ -505,6 +579,294 @@ describe('Moneta API auth + learning flow', () => {
     expect(response.body.practiceReviews[0].skillId).toBe('future');
   });
 
+  it('limits free-plan reviews and preserves locked or unresolved review metadata', async () => {
+    const { app, repository } = buildApp();
+
+    const register = await request(app).post('/api/auth/register').send({
+      email: 'review-limit@example.com',
+      password: 'password123'
+    });
+    const userId = register.body.userId as string;
+
+    const login = await request(app).post('/api/auth/login').send({
+      email: 'review-limit@example.com',
+      password: 'password123'
+    });
+
+    const now = Date.now();
+    await repository.upsertUserProfile({
+      userId,
+      currentLevel: 'F4',
+      streakDays: 5,
+      entitlement: createDefaultEntitlement(),
+      skills: {
+        'withdrawal-rate': {
+          skillId: 'withdrawal-rate',
+          mastery: 0.4,
+          nextReviewAt: new Date(now - 300_000).toISOString()
+        },
+        'unknown-skill': {
+          skillId: 'unknown-skill',
+          mastery: 0.2,
+          nextReviewAt: new Date(now - 240_000).toISOString()
+        },
+        'apr-vs-apy': {
+          skillId: 'apr-vs-apy',
+          mastery: 0.5,
+          nextReviewAt: new Date(now - 180_000).toISOString()
+        },
+        'basic-budgeting': {
+          skillId: 'basic-budgeting',
+          mastery: 0.5,
+          nextReviewAt: new Date(now + 60_000).toISOString()
+        },
+        'credit-utilization': {
+          skillId: 'credit-utilization',
+          mastery: 0.5,
+          nextReviewAt: new Date(now + 120_000).toISOString()
+        },
+        'payment-history': {
+          skillId: 'payment-history',
+          mastery: 0.5,
+          nextReviewAt: new Date(now + 180_000).toISOString()
+        },
+        'credit-mix': {
+          skillId: 'credit-mix',
+          mastery: 0.5,
+          nextReviewAt: new Date(now + 240_000).toISOString()
+        }
+      }
+    });
+
+    const response = await request(app)
+      .get(`/api/learn/today/${userId}`)
+      .set('Authorization', `Bearer ${login.body.accessToken as string}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.dueReviews).toHaveLength(3);
+    expect(response.body.practiceReviews).toHaveLength(3);
+
+    const lockedPremium = response.body.dueReviews.find((review: { skillId: string }) => review.skillId === 'withdrawal-rate');
+    expect(lockedPremium).toMatchObject({
+      skillId: 'withdrawal-rate',
+      locked: true
+    });
+    expect(lockedPremium.contentItemId).toBeUndefined();
+    expect(lockedPremium.prompt).toBeUndefined();
+
+    const unresolved = response.body.dueReviews.find((review: { skillId: string }) => review.skillId === 'unknown-skill');
+    expect(unresolved).toMatchObject({
+      skillId: 'unknown-skill'
+    });
+    expect(unresolved.contentItemId).toBeUndefined();
+    expect(unresolved.prompt).toBeUndefined();
+  });
+
+  it('supports standalone answer grading, numeric equivalence, and blank normalized answers', async () => {
+    const { app, accessToken } = await buildAuthedApp();
+
+    const numericEquivalent = await request(app)
+      .post('/api/sessions/complete')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        timeZone: 'UTC',
+        itemResults: [
+          { itemId: 'item-credit-001', skillId: 'credit-utilization', answer: '0.2' },
+          { skillId: 'payment-history', isCorrect: true }
+        ]
+      });
+
+    expect(numericEquivalent.status).toBe(200);
+    expect(numericEquivalent.body.gradedItems).toMatchObject([
+      {
+        itemId: 'item-credit-001',
+        skillId: 'credit-utilization',
+        isCorrect: true
+      }
+    ]);
+    expect(numericEquivalent.body.scheduledReviews).toHaveLength(2);
+
+    const blankAnswer = await request(app)
+      .post('/api/sessions/complete')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        timeZone: 'UTC',
+        itemResults: [
+          { itemId: 'item-budget-001', skillId: 'basic-budgeting', answer: '   ' }
+        ]
+      });
+
+    expect(blankAnswer.status).toBe(200);
+    expect(blankAnswer.body.gradedItems).toMatchObject([
+      {
+        itemId: 'item-budget-001',
+        skillId: 'basic-budgeting',
+        isCorrect: false
+      }
+    ]);
+  });
+
+  it('rejects standalone grading mismatches and missing lessons in both grading paths', async () => {
+    const { app, accessToken } = await buildAuthedApp();
+
+    const unknownStandaloneItem = await request(app)
+      .post('/api/sessions/complete')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        itemResults: [{ itemId: 'item-missing', skillId: 'apr-vs-apy', answer: 'borrowing cost' }]
+      });
+    expect(unknownStandaloneItem.status).toBe(400);
+
+    const mismatchedStandaloneItem = await request(app)
+      .post('/api/sessions/complete')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        itemResults: [{ itemId: 'item-apr-001', skillId: 'basic-budgeting', answer: 'borrowing cost' }]
+      });
+    expect(mismatchedStandaloneItem.status).toBe(400);
+
+    const missingLessonWithAnswers = await request(app)
+      .post('/api/sessions/complete')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        lessonId: 'lesson-missing',
+        itemResults: [{ itemId: 'item-apr-001', skillId: 'apr-vs-apy', answer: 'borrowing cost' }]
+      });
+    expect(missingLessonWithAnswers.status).toBe(404);
+
+    const missingLessonWithBooleans = await request(app)
+      .post('/api/sessions/complete')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        lessonId: 'lesson-missing',
+        itemResults: [{ skillId: 'apr-vs-apy', isCorrect: true }]
+      });
+    expect(missingLessonWithBooleans.status).toBe(404);
+  });
+
+  it('validates lesson and review grading edge cases', async () => {
+    const { app, accessToken } = await buildAuthedApp();
+
+    const unknownLesson = await request(app)
+      .get('/api/learn/lessons/lesson-missing')
+      .set('Authorization', `Bearer ${accessToken}`);
+    expect(unknownLesson.status).toBe(404);
+
+    const missingOutcome = await request(app)
+      .post('/api/sessions/complete')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        lessonId: 'lesson-cash-flow-f1-001',
+        itemResults: [{ skillId: 'apr-vs-apy' }]
+      });
+    expect(missingOutcome.status).toBe(400);
+
+    const answerWithoutItemId = await request(app)
+      .post('/api/sessions/complete')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        itemResults: [{ skillId: 'apr-vs-apy', answer: 'borrowing cost' }]
+      });
+    expect(answerWithoutItemId.status).toBe(400);
+
+    const unknownItemId = await request(app)
+      .post('/api/sessions/complete')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        lessonId: 'lesson-cash-flow-f1-001',
+        itemResults: [{ itemId: 'item-missing', skillId: 'apr-vs-apy', answer: 'borrowing cost' }]
+      });
+    expect(unknownItemId.status).toBe(400);
+
+    const mismatchedSkill = await request(app)
+      .post('/api/sessions/complete')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        lessonId: 'lesson-cash-flow-f1-001',
+        itemResults: [{ itemId: 'item-apr-001', skillId: 'basic-budgeting', answer: 'borrowing cost' }]
+      });
+    expect(mismatchedSkill.status).toBe(400);
+
+    const noMatchedSkills = await request(app)
+      .post('/api/sessions/complete')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        lessonId: 'lesson-cash-flow-f1-001',
+        itemResults: [{ skillId: 'not-in-lesson', isCorrect: true }]
+      });
+    expect(noMatchedSkills.status).toBe(400);
+
+    const premiumLessonDenied = await request(app)
+      .post('/api/sessions/complete')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        lessonId: 'lesson-retirement-income-f4-001',
+        itemResults: [{ skillId: 'withdrawal-rate', isCorrect: true }]
+      });
+    expect(premiumLessonDenied.status).toBe(402);
+
+    const premiumReviewDenied = await request(app)
+      .post('/api/sessions/complete')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        itemResults: [{
+          itemId: 'item-retire-001',
+          skillId: 'withdrawal-rate',
+          answer: 'sequence risk and longevity'
+        }]
+      });
+    expect(premiumReviewDenied.status).toBe(402);
+  });
+
+  it('syncs completed lessons from already-mastered skills before persisting the session', async () => {
+    const { app, repository } = buildApp();
+
+    const register = await request(app).post('/api/auth/register').send({
+      email: 'mastery-sync@example.com',
+      password: 'password123'
+    });
+    const userId = register.body.userId as string;
+
+    const login = await request(app).post('/api/auth/login').send({
+      email: 'mastery-sync@example.com',
+      password: 'password123'
+    });
+
+    await repository.upsertUserProfile({
+      userId,
+      currentLevel: 'F1',
+      streakDays: 4,
+      entitlement: createDefaultEntitlement(),
+      completedLessons: undefined,
+      skills: {
+        'apr-vs-apy': { skillId: 'apr-vs-apy', mastery: 0.8 },
+        'basic-budgeting': { skillId: 'basic-budgeting', mastery: 0.8 },
+        'fixed-vs-variable-expenses': { skillId: 'fixed-vs-variable-expenses', mastery: 0.8 },
+        'net-cash-flow': { skillId: 'net-cash-flow', mastery: 0.8 },
+        'cash-flow-checkin-cadence': { skillId: 'cash-flow-checkin-cadence', mastery: 0.8 },
+        'pay-yourself-first': { skillId: 'pay-yourself-first', mastery: 0.8 }
+      }
+    });
+
+    const completion = await request(app)
+      .post('/api/sessions/complete')
+      .set('Authorization', `Bearer ${login.body.accessToken as string}`)
+      .send({
+        itemResults: [{ skillId: 'apr-vs-apy', isCorrect: true }],
+        timeZone: 'UTC'
+      });
+
+    expect(completion.status).toBe(200);
+
+    const pathResponse = await request(app)
+      .get(`/api/learn/path/${userId}`)
+      .set('Authorization', `Bearer ${login.body.accessToken as string}`);
+
+    expect(pathResponse.status).toBe(200);
+    const syncedLesson = pathResponse.body.lessons.find((lesson: { lessonId: string }) => lesson.lessonId === 'lesson-cash-flow-f1-001');
+    expect(syncedLesson?.completed).toBe(true);
+  });
+
   it('exports account data and supports authenticated account deletion', async () => {
     const { app, accessToken, userId } = await buildAuthedApp();
 
@@ -547,6 +909,30 @@ describe('Moneta API auth + learning flow', () => {
       .get(`/api/progress/${userId}`)
       .set('Authorization', `Bearer ${accessToken}`);
     expect(progressAfterDelete.status).toBe(404);
+  });
+
+  it('returns 404 for authenticated export and deletion after the account is gone', async () => {
+    const { app, accessToken } = await buildAuthedApp();
+
+    const firstDelete = await request(app)
+      .delete('/api/auth/account')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ confirmation: 'DELETE_ACCOUNT' });
+
+    expect(firstDelete.status).toBe(200);
+
+    const exportAfterDelete = await request(app)
+      .get('/api/auth/account/export')
+      .set('Authorization', `Bearer ${accessToken}`);
+
+    expect(exportAfterDelete.status).toBe(404);
+
+    const secondDelete = await request(app)
+      .delete('/api/auth/account')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ confirmation: 'DELETE_ACCOUNT' });
+
+    expect(secondDelete.status).toBe(404);
   });
 
   it('returns free entitlements by default and upgrades on sync', async () => {
@@ -726,6 +1112,261 @@ describe('Moneta API auth + learning flow', () => {
     expect(response.status).toBe(401);
   });
 
+  it('covers billing route validation and missing-user webhook edge cases', async () => {
+    const { app } = buildApp();
+
+    const firstRegister = await request(app).post('/api/auth/register').send({
+      email: 'billing-edge-1@example.com',
+      password: 'password123'
+    });
+    const firstUserId = firstRegister.body.userId as string;
+
+    const firstLogin = await request(app).post('/api/auth/login').send({
+      email: 'billing-edge-1@example.com',
+      password: 'password123'
+    });
+    const firstAccessToken = firstLogin.body.accessToken as string;
+
+    const secondRegister = await request(app).post('/api/auth/register').send({
+      email: 'billing-edge-2@example.com',
+      password: 'password123'
+    });
+    const secondUserId = secondRegister.body.userId as string;
+
+    const forbiddenEntitlements = await request(app)
+      .get(`/api/billing/entitlements/${secondUserId}`)
+      .set('Authorization', `Bearer ${firstAccessToken}`);
+
+    expect(forbiddenEntitlements.status).toBe(403);
+
+    const invalidSync = await request(app)
+      .post('/api/billing/entitlements/sync')
+      .set('Authorization', `Bearer ${firstAccessToken}`)
+      .send({
+        platform: 'ios',
+        productId: '',
+        purchaseToken: 'short'
+      });
+
+    expect(invalidSync.status).toBe(400);
+
+    const deleteAccount = await request(app)
+      .delete('/api/auth/account')
+      .set('Authorization', `Bearer ${firstAccessToken}`)
+      .send({ confirmation: 'DELETE_ACCOUNT' });
+
+    expect(deleteAccount.status).toBe(200);
+
+    const missingEntitlements = await request(app)
+      .get(`/api/billing/entitlements/${firstUserId}`)
+      .set('Authorization', `Bearer ${firstAccessToken}`);
+
+    expect(missingEntitlements.status).toBe(404);
+
+    const invalidDatePayload = {
+      eventId: 'evt_invalid_period_end',
+      userId: secondUserId,
+      platform: 'ios',
+      productId: 'moneta.pro.monthly',
+      isActive: true,
+      currentPeriodEndsAt: 'not-a-date'
+    };
+    const invalidDateJson = JSON.stringify(invalidDatePayload);
+    const invalidDateTimestamp = String(Math.floor(Date.now() / 1000));
+    const invalidDateSignature = createWebhookSignature(
+      'test-billing-webhook-secret',
+      Buffer.from(invalidDateJson),
+      invalidDateTimestamp
+    );
+
+    const invalidDateResponse = await request(app)
+      .post('/api/billing/webhooks/reconcile')
+      .set('Content-Type', 'application/json')
+      .set('x-billing-signature', invalidDateSignature)
+      .set('x-billing-timestamp', invalidDateTimestamp)
+      .send(invalidDateJson);
+
+    expect(invalidDateResponse.status).toBe(400);
+
+    const missingUserPayload = {
+      eventId: 'evt_missing_user',
+      userId: 'missing-user',
+      platform: 'ios',
+      productId: 'moneta.pro.monthly',
+      isActive: true
+    };
+    const missingUserJson = JSON.stringify(missingUserPayload);
+    const missingUserTimestamp = String(Math.floor(Date.now() / 1000));
+    const missingUserSignature = createWebhookSignature(
+      'test-billing-webhook-secret',
+      Buffer.from(missingUserJson),
+      missingUserTimestamp
+    );
+
+    const missingUserResponse = await request(app)
+      .post('/api/billing/webhooks/reconcile')
+      .set('Content-Type', 'application/json')
+      .set('x-billing-signature', missingUserSignature)
+      .set('x-billing-timestamp', missingUserTimestamp)
+      .send(missingUserJson);
+
+    expect(missingUserResponse.status).toBe(404);
+  });
+
+  it('covers learning validation, premium lesson gating, and mastery sync completions', async () => {
+    const { app, repository } = buildApp();
+    const premiumLesson = listCurriculum(true).find((lesson) => lesson.premium);
+    const masteredLesson = listCurriculum(false)[0];
+
+    expect(premiumLesson).toBeDefined();
+    expect(masteredLesson).toBeDefined();
+    if (!premiumLesson || !masteredLesson) {
+      throw new Error('Expected curriculum fixtures to be available for coverage tests');
+    }
+
+    const register = await request(app).post('/api/auth/register').send({
+      email: 'learning-edge@example.com',
+      password: 'password123'
+    });
+    const userId = register.body.userId as string;
+
+    const login = await request(app).post('/api/auth/login').send({
+      email: 'learning-edge@example.com',
+      password: 'password123'
+    });
+    const accessToken = login.body.accessToken as string;
+
+    const masteredSkillIds = [...new Set(masteredLesson.items.map((item) => item.skillId))];
+    await repository.upsertUserProfile({
+      userId,
+      currentLevel: 'F1',
+      streakDays: 0,
+      entitlement: createDefaultEntitlement(),
+      skills: {
+        ...Object.fromEntries(masteredSkillIds.map((skillId) => [
+          skillId,
+          { skillId, mastery: 0.9 }
+        ])),
+        'no-review-skill': { skillId: 'no-review-skill', mastery: 0.2 },
+        'future-review-skill': {
+          skillId: 'future-review-skill',
+          mastery: 0.2,
+          nextReviewAt: new Date(Date.now() + 86_400_000).toISOString()
+        }
+      }
+    });
+
+    const invalidPlacement = await request(app)
+      .post('/api/onboarding/placement')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        correctAnswers: -1,
+        totalQuestions: 0
+      });
+
+    expect(invalidPlacement.status).toBe(400);
+
+    const forbiddenToday = await request(app)
+      .get('/api/learn/today/someone-else')
+      .set('Authorization', `Bearer ${accessToken}`);
+
+    expect(forbiddenToday.status).toBe(403);
+
+    const missingLesson = await request(app)
+      .get('/api/learn/lessons/missing-lesson')
+      .set('Authorization', `Bearer ${accessToken}`);
+
+    expect(missingLesson.status).toBe(404);
+
+    const premiumLessonResponse = await request(app)
+      .get(`/api/learn/lessons/${premiumLesson.lessonId}`)
+      .set('Authorization', `Bearer ${accessToken}`);
+
+    expect(premiumLessonResponse.status).toBe(402);
+
+    const invalidLessonSession = await request(app)
+      .post('/api/sessions/complete')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        lessonId: masteredLesson.lessonId,
+        itemResults: [{ skillId: masteredSkillIds[0] }]
+      });
+
+    expect(invalidLessonSession.status).toBe(400);
+
+    const invalidStandaloneSession = await request(app)
+      .post('/api/sessions/complete')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        itemResults: [{ skillId: masteredSkillIds[0] }]
+      });
+
+    expect(invalidStandaloneSession.status).toBe(400);
+
+    const answerWithoutItemId = await request(app)
+      .post('/api/sessions/complete')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        itemResults: [{ skillId: masteredSkillIds[0], answer: 'yes' }]
+      });
+
+    expect(answerWithoutItemId.status).toBe(400);
+
+    const firstSession = await request(app)
+      .post('/api/sessions/complete')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        itemResults: [{ skillId: masteredSkillIds[0], isCorrect: true }],
+        timeZone: 'Invalid/Timezone'
+      });
+
+    expect(firstSession.status).toBe(200);
+
+    const secondSession = await request(app)
+      .post('/api/sessions/complete')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        itemResults: [{ skillId: masteredSkillIds[0], isCorrect: false }],
+        timeZone: 'America/Los_Angeles'
+      });
+
+    expect(secondSession.status).toBe(200);
+
+    const path = await request(app)
+      .get(`/api/learn/path/${userId}`)
+      .set('Authorization', `Bearer ${accessToken}`);
+
+    expect(path.status).toBe(200);
+    expect(
+      path.body.lessons.find((lesson: { lessonId: string; completed: boolean }) => lesson.lessonId === masteredLesson.lessonId)?.completed
+    ).toBe(true);
+
+    const today = await request(app)
+      .get(`/api/learn/today/${userId}`)
+      .set('Authorization', `Bearer ${accessToken}`);
+
+    expect(today.status).toBe(200);
+    expect(today.body.dueReviews.some((review: { skillId: string }) => review.skillId === 'no-review-skill')).toBe(false);
+    expect(today.body.practiceReviews.some((review: { skillId: string }) => review.skillId === 'no-review-skill')).toBe(false);
+
+    const deleteAccount = await request(app)
+      .delete('/api/auth/account')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ confirmation: 'DELETE_ACCOUNT' });
+
+    expect(deleteAccount.status).toBe(200);
+
+    const missingPlacementUser = await request(app)
+      .post('/api/onboarding/placement')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        correctAnswers: 2,
+        totalQuestions: 5
+      });
+
+    expect(missingPlacementUser.status).toBe(404);
+  });
+
   it('requires metrics token when configured and exposes health/readiness', async () => {
     const app = createApp({
       repository: new InMemoryUserRepository(),
@@ -752,5 +1393,143 @@ describe('Moneta API auth + learning flow', () => {
 
     const ready = await request(app).get('/ready');
     expect(ready.status).toBe(200);
+  });
+
+  it('blocks disallowed origins and supports deployments without CORS origins configured', async () => {
+    const restrictedApp = createApp({
+      repository: new InMemoryUserRepository(),
+      jwtSecret: 'test-secret',
+      jwtRefreshSecret: 'test-refresh-secret',
+      jwtAccessTtlSeconds: 3600,
+      jwtRefreshTtlSeconds: 604800,
+      allowedOrigins: ['http://localhost:5173'],
+      trustProxy: false
+    });
+
+    const blocked = await request(restrictedApp)
+      .get('/health')
+      .set('Origin', 'https://blocked.example');
+
+    expect(blocked.status).toBe(403);
+    expect(blocked.body.error).toBe('Blocked by CORS');
+
+    const noCorsApp = createApp({
+      repository: new InMemoryUserRepository(),
+      jwtSecret: 'test-secret',
+      jwtRefreshSecret: 'test-refresh-secret',
+      jwtAccessTtlSeconds: 3600,
+      jwtRefreshTtlSeconds: 604800,
+      allowedOrigins: [],
+      trustProxy: false
+    });
+
+    const noCors = await request(noCorsApp)
+      .get('/health')
+      .set('Origin', 'https://any-origin.example');
+
+    expect(noCors.status).toBe(200);
+    expect(noCors.headers['access-control-allow-origin']).toBeUndefined();
+  });
+
+  it('returns not ready when repository readiness fails', async () => {
+    const repository = new InMemoryUserRepository();
+    repository.checkReadiness = async () => false;
+
+    const app = createApp({
+      repository,
+      jwtSecret: 'test-secret',
+      jwtRefreshSecret: 'test-refresh-secret',
+      jwtAccessTtlSeconds: 3600,
+      jwtRefreshTtlSeconds: 604800,
+      allowedOrigins: ['http://localhost:5173'],
+      trustProxy: false
+    });
+
+    const ready = await request(app).get('/ready');
+    expect(ready.status).toBe(503);
+    expect(ready.body.error).toBe('Service not ready');
+  });
+
+  it('returns a generic 500 response for unhandled errors', async () => {
+    const app = express();
+
+    app.use((req, _res, next) => {
+      (req as typeof req & { requestId: string }).requestId = 'test-request-id';
+      next();
+    });
+
+    app.get('/boom', () => {
+      throw new Error('boom');
+    });
+
+    app.use(errorHandler);
+
+    const response = await request(app).get('/boom');
+    expect(response.status).toBe(500);
+    expect(response.body.error).toBe('Internal server error');
+  });
+
+  it('serves the marketing landing page, robots, and sitemap', async () => {
+    const { app } = buildApp();
+
+    const page = await request(app).get('/');
+    expect(page.status).toBe(200);
+    expect(page.headers['content-type']).toContain('text/html');
+    expect(page.text).toContain('Build money confidence in 5-minute lessons');
+    expect(page.text).toContain('Explore the Learning Path');
+    expect(page.text).toContain('Skip to content');
+
+    const robots = await request(app).get('/robots.txt').set('Host', 'moneta.test');
+    expect(robots.status).toBe(200);
+    expect(robots.text).toContain('Sitemap: http://moneta.test/sitemap.xml');
+
+    const sitemap = await request(app).get('/sitemap.xml').set('Host', 'moneta.test');
+    expect(sitemap.status).toBe(200);
+    expect(sitemap.text).toContain('<loc>http://moneta.test/</loc>');
+  });
+
+  it('injects configured launch links into the landing page', async () => {
+    const originalIosUrl = process.env.MARKETING_IOS_URL;
+    const originalPrivacyUrl = process.env.MARKETING_PRIVACY_URL;
+
+    process.env.MARKETING_IOS_URL = 'https://apps.apple.com/us/app/moneta/id123456789';
+    process.env.MARKETING_PRIVACY_URL = 'https://moneta.app/privacy';
+
+    try {
+      const { app } = buildApp();
+      const page = await request(app).get('/');
+
+      expect(page.text).toContain('https://apps.apple.com/us/app/moneta/id123456789');
+      expect(page.text).toContain('Download for iPhone');
+      expect(page.text).toContain('https://moneta.app/privacy');
+    } finally {
+      if (originalIosUrl) {
+        process.env.MARKETING_IOS_URL = originalIosUrl;
+      } else {
+        delete process.env.MARKETING_IOS_URL;
+      }
+
+      if (originalPrivacyUrl) {
+        process.env.MARKETING_PRIVACY_URL = originalPrivacyUrl;
+      } else {
+        delete process.env.MARKETING_PRIVACY_URL;
+      }
+    }
+  });
+
+  it('returns a server error when password reset email service is not configured', async () => {
+    const { app } = buildApp();
+
+    await request(app).post('/api/auth/register').send({
+      email: 'no-email-service@example.com',
+      password: 'password123'
+    });
+
+    const response = await request(app).post('/api/auth/password/reset/request').send({
+      email: 'no-email-service@example.com'
+    });
+
+    expect(response.status).toBe(500);
+    expect(response.body.error).toContain('Email service is not configured');
   });
 });

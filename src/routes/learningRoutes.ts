@@ -530,6 +530,23 @@ function evaluateLessonCompletion(
   };
 }
 
+// Exposed for focused unit tests of validation and grading branches that are awkward to hit through route-level tests alone.
+export const __testables = {
+  validateParams,
+  validateLessonParams,
+  getProgressSummary,
+  toReviewQueues,
+  resolveTimeZone,
+  ensureCompletedLessons,
+  syncMasteryCompletions,
+  parseNumericCandidate,
+  numericEquivalent,
+  isAnswerCorrect,
+  gradeLessonAnswers,
+  gradeStandaloneAnswers,
+  evaluateLessonCompletion
+} as const;
+
 export function registerLearningRoutes(app: express.Express, deps: RouteDeps): void {
   app.post('/api/onboarding/placement', authenticateJwt(deps.jwtSecret), (req: AuthenticatedRequest, res, next: NextFunction) => {
     Promise.resolve().then(async () => {
