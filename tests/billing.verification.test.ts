@@ -2,38 +2,11 @@ import crypto from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createBillingVerifier, createWebhookSignature } from '../src/billing.verification.js';
 
-interface JsonResponse {
-  ok: boolean;
-  status: number;
-  json: () => Promise<unknown>;
-}
-
-function mockJsonResponse(status: number, body: unknown): JsonResponse {
-  return {
-    ok: status >= 200 && status < 300,
-    status,
-    json: async () => body
-  };
-}
-
-afterEach(() => {
-  vi.restoreAllMocks();
-});
-
-
-const TEST_PRIVATE_KEY = crypto.generateKeyPairSync('rsa', { modulusLength: 1024 }).privateKey.export({
-  type: 'pkcs8',
-  format: 'pem'
-}).toString();
-
-function createGoogleServiceAccountJson(): string {
-  return JSON.stringify({
-    client_email: 'svc@project.iam.gserviceaccount.com',
-    private_key: TEST_PRIVATE_KEY.replace(/\n/g, '\\n')
-  });
-}
-
 describe('billing verification', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it('requires webhook and provider config in production', () => {
     expect(() => createBillingVerifier({
       nodeEnv: 'production',
@@ -64,218 +37,126 @@ describe('billing verification', () => {
       productId: 'moneta.pro.yearly',
       purchaseToken: 'sandbox-android-token'
     });
-    const web = await verifier.verifyPurchase({
-      platform: 'web',
-      productId: 'moneta.pro.web',
-      purchaseToken: 'sandbox-web-token'
-    });
 
     expect(ios.isActive).toBe(true);
     expect(ios.source).toBe('ios');
     expect(android.isActive).toBe(true);
     expect(android.source).toBe('android');
-    expect(web.source).toBe('web');
-    expect(web.verificationReference).toBe('sandbox-web');
   });
 
-  it('verifies apple purchases and retries sandbox endpoint for status 21007', async () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
-      const url = String(input);
-      if (url.includes('buy.itunes.apple.com')) {
-        return mockJsonResponse(200, { status: 21007 }) as Response;
-      }
+  it('rejects Apple receipts that do not match the requested productId', async () => {
+    const now = new Date('2026-02-15T00:00:00.000Z');
 
-      return mockJsonResponse(200, {
-        status: 0,
-        latest_receipt_info: [
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
+      status: 0,
+      receipt: {
+        in_app: [
+          {
+            product_id: 'some.other.sku',
+            expires_date_ms: String(now.getTime() + 60 * 60 * 1000),
+            transaction_id: 'tx_1'
+          }
+        ]
+      }
+    }), { status: 200 })));
+
+    const verifier = createBillingVerifier({
+      nodeEnv: 'development',
+      allowSandboxTokens: false,
+      webhookSecret: 'webhook-secret',
+      appleSharedSecret: 'apple-shared-secret'
+    });
+
+    await expect(verifier.verifyPurchase({
+      platform: 'ios',
+      productId: 'moneta.pro.monthly',
+      purchaseToken: 'ios-receipt-token',
+      now
+    })).rejects.toThrow('Apple purchase did not match product');
+  });
+
+  it('rejects Apple receipts that do not include an expiry', async () => {
+    const now = new Date('2026-02-15T00:00:00.000Z');
+
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
+      status: 0,
+      receipt: {
+        in_app: [
           {
             product_id: 'moneta.pro.monthly',
-            expires_date_ms: String(Date.now() + 24 * 60 * 60 * 1000),
-            transaction_id: 'txn_123'
+            transaction_id: 'tx_1'
           }
         ]
-      }) as Response;
-    });
+      }
+    }), { status: 200 })));
 
     const verifier = createBillingVerifier({
       nodeEnv: 'development',
       allowSandboxTokens: false,
       webhookSecret: 'webhook-secret',
-      appleSharedSecret: 'apple-secret'
+      appleSharedSecret: 'apple-shared-secret'
     });
 
-    const result = await verifier.verifyPurchase({
+    await expect(verifier.verifyPurchase({
       platform: 'ios',
       productId: 'moneta.pro.monthly',
-      purchaseToken: 'receipt-token'
-    });
-
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(result.source).toBe('ios');
-    expect(result.isActive).toBe(true);
-    expect(result.verificationReference).toBe('txn_123');
+      purchaseToken: 'ios-receipt-token',
+      now
+    })).rejects.toThrow('Apple subscription receipt was missing an expiry');
   });
 
-  it('returns inactive apple purchase when cancellation is present', async () => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      mockJsonResponse(200, {
-        status: 0,
-        receipt: {
-          in_app: [
+  it('rejects Google Play purchases that do not match the requested productId', async () => {
+    const now = new Date('2026-02-15T00:00:00.000Z');
+
+    const { privateKey } = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
+    const privateKeyPem = privateKey.export({ type: 'pkcs1', format: 'pem' }).toString();
+    const serviceAccountJson = JSON.stringify({
+      client_email: 'billing-test@example.com',
+      private_key: privateKeyPem,
+      token_uri: 'https://example.com/token'
+    });
+
+    vi.stubGlobal('fetch', vi.fn(async (url: string | URL, init?: RequestInit) => {
+      const urlString = typeof url === 'string' ? url : url.toString();
+
+      if (urlString === 'https://example.com/token' && init?.method === 'POST') {
+        return new Response(JSON.stringify({ access_token: 'test-access-token' }), { status: 200 });
+      }
+
+      if (urlString.includes('/purchases/subscriptionsv2/tokens/') && init?.method === 'GET') {
+        return new Response(JSON.stringify({
+          subscriptionState: 'SUBSCRIPTION_STATE_ACTIVE',
+          latestOrderId: 'order_123',
+          lineItems: [
             {
-              product_id: 'moneta.pro.monthly',
-              expires_date_ms: String(Date.now() + 24 * 60 * 60 * 1000),
-              cancellation_date_ms: String(Date.now()),
-              transaction_id: 'txn_cancelled'
+              productId: 'some.other.sku',
+              expiryTime: new Date(now.getTime() + 60 * 60 * 1000).toISOString()
             }
           ]
-        }
-      }) as Response
-    );
-
-    const verifier = createBillingVerifier({
-      nodeEnv: 'development',
-      allowSandboxTokens: false,
-      webhookSecret: 'webhook-secret',
-      appleSharedSecret: 'apple-secret'
-    });
-
-    const result = await verifier.verifyPurchase({
-      platform: 'ios',
-      productId: 'moneta.pro.monthly',
-      purchaseToken: 'receipt-token'
-    });
-
-    expect(result.isActive).toBe(false);
-    expect(result.currentPeriodEndsAt).toBeUndefined();
-  });
-
-  it('throws when apple verification fails', async () => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(mockJsonResponse(200, { status: 100 }) as Response);
-
-    const verifier = createBillingVerifier({
-      nodeEnv: 'development',
-      allowSandboxTokens: false,
-      webhookSecret: 'webhook-secret',
-      appleSharedSecret: 'apple-secret'
-    });
-
-    await expect(verifier.verifyPurchase({
-      platform: 'ios',
-      productId: 'moneta.pro.monthly',
-      purchaseToken: 'receipt-token'
-    })).rejects.toMatchObject({ statusCode: 402 });
-  });
-
-  it('throws when apple billing is not configured', async () => {
-    const verifier = createBillingVerifier({
-      nodeEnv: 'development',
-      allowSandboxTokens: false,
-      webhookSecret: 'webhook-secret'
-    });
-
-    await expect(verifier.verifyPurchase({
-      platform: 'ios',
-      productId: 'moneta.pro.monthly',
-      purchaseToken: 'receipt-token'
-    })).rejects.toMatchObject({ statusCode: 400 });
-  });
-
-  it('verifies google purchase and maps active entitlement fields', async () => {
-    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
-      const url = String(input);
-      if (url.includes('oauth2.googleapis.com/token') || (url.endsWith('/token') && !url.includes('/tokens/'))) {
-        return mockJsonResponse(200, { access_token: 'google-access-token' }) as Response;
+        }), { status: 200 });
       }
 
-      expect(init?.method).toBe('GET');
-      expect(init?.headers).toMatchObject({ Authorization: 'Bearer google-access-token' });
-      return mockJsonResponse(200, {
-        subscriptionState: 'SUBSCRIPTION_STATE_ACTIVE',
-        latestOrderId: 'order-123',
-        lineItems: [
-          {
-            productId: 'moneta.pro.yearly',
-            expiryTime: new Date(Date.now() + 86_400_000).toISOString()
-          }
-        ]
-      }) as Response;
-    });
+      return new Response('not found', { status: 404 });
+    }));
 
     const verifier = createBillingVerifier({
       nodeEnv: 'development',
       allowSandboxTokens: false,
       webhookSecret: 'webhook-secret',
-      googlePackageName: 'com.moneta.app',
-      googleServiceAccountJson: createGoogleServiceAccountJson()
-    });
-
-    const result = await verifier.verifyPurchase({
-      platform: 'android',
-      productId: 'moneta.pro.yearly',
-      purchaseToken: 'purchase-token'
-    });
-
-    expect(result.source).toBe('android');
-    expect(result.isActive).toBe(true);
-    expect(result.verificationReference).toBe('order-123');
-    expect(result.currentPeriodEndsAt).toBeDefined();
-  });
-
-  it('throws when google auth is malformed or purchase is missing', async () => {
-    const badJsonVerifier = createBillingVerifier({
-      nodeEnv: 'development',
-      allowSandboxTokens: false,
-      webhookSecret: 'webhook-secret',
-      googlePackageName: 'com.moneta.app',
-      googleServiceAccountJson: '{bad-json'
-    });
-
-    await expect(badJsonVerifier.verifyPurchase({
-      platform: 'android',
-      productId: 'moneta.pro.yearly',
-      purchaseToken: 'purchase-token'
-    })).rejects.toMatchObject({ statusCode: 500 });
-
-    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
-      const url = String(input);
-      if (url.includes('oauth2.googleapis.com/token') || (url.endsWith('/token') && !url.includes('/tokens/'))) {
-        return mockJsonResponse(200, { access_token: 'google-access-token' }) as Response;
-      }
-
-      return mockJsonResponse(404, {}) as Response;
-    });
-
-    const verifier = createBillingVerifier({
-      nodeEnv: 'development',
-      allowSandboxTokens: false,
-      webhookSecret: 'webhook-secret',
-      googlePackageName: 'com.moneta.app',
-      googleServiceAccountJson: createGoogleServiceAccountJson()
+      googlePackageName: 'com.example.moneta',
+      googleServiceAccountJson: serviceAccountJson,
+      googleTokenUrl: 'https://example.com/token'
     });
 
     await expect(verifier.verifyPurchase({
       platform: 'android',
-      productId: 'moneta.pro.yearly',
-      purchaseToken: 'purchase-token'
-    })).rejects.toMatchObject({ statusCode: 402 });
+      productId: 'moneta.pro.monthly',
+      purchaseToken: 'android-purchase-token',
+      now
+    })).rejects.toThrow('Google Play purchase did not match product');
   });
 
-  it('rejects unsupported web purchases when sandbox mode is disabled', async () => {
-    const verifier = createBillingVerifier({
-      nodeEnv: 'development',
-      allowSandboxTokens: false,
-      webhookSecret: 'webhook-secret'
-    });
-
-    await expect(verifier.verifyPurchase({
-      platform: 'web',
-      productId: 'moneta.pro.web',
-      purchaseToken: 'not-sandbox-web-token'
-    })).rejects.toMatchObject({ statusCode: 400 });
-  });
-
-  it('validates webhook signatures and rejects malformed signatures', () => {
+  it('validates webhook signatures with replay window', () => {
     const secret = 'webhook-secret';
     const verifier = createBillingVerifier({
       nodeEnv: 'development',
@@ -289,27 +170,498 @@ describe('billing verification', () => {
 
     expect(verifier.verifyWebhookSignature(body, signature, timestamp)).toBe(true);
     expect(verifier.verifyWebhookSignature(body, `${timestamp}.deadbeef`, timestamp)).toBe(false);
-    expect(verifier.verifyWebhookSignature(body, undefined, timestamp)).toBe(false);
-    expect(verifier.verifyWebhookSignature(body, 'invalid-signature')).toBe(false);
-    expect(verifier.verifyWebhookSignature(body, `t=${timestamp},v1=deadbeef`, timestamp)).toBe(false);
-    expect(verifier.verifyWebhookSignature(body, signature, String(Number(timestamp) + 1))).toBe(false);
   });
 
-  it('rejects webhook signatures outside replay window', () => {
+  it('supports comma-delimited webhook signatures and rejects malformed variants', () => {
     const secret = 'webhook-secret';
     const verifier = createBillingVerifier({
       nodeEnv: 'development',
       allowSandboxTokens: true,
       webhookSecret: secret
     });
-
     const body = Buffer.from(JSON.stringify({ eventId: 'evt_2' }));
-    const nowSeconds = 1_700_000_000;
-    vi.spyOn(Date, 'now').mockReturnValue(nowSeconds * 1000);
+    const timestamp = String(Math.floor(Date.now() / 1000));
+    const dotSignature = createWebhookSignature(secret, body, timestamp);
+    const digest = dotSignature.split('.')[1];
 
-    const staleTimestamp = String(nowSeconds - 1000);
-    const signature = createWebhookSignature(secret, body, staleTimestamp);
+    expect(verifier.verifyWebhookSignature(body, `t=${timestamp},v1=${digest}`)).toBe(true);
+    expect(verifier.verifyWebhookSignature(body, 't=123')).toBe(false);
+    expect(verifier.verifyWebhookSignature(body, dotSignature, '999')).toBe(false);
+    expect(verifier.verifyWebhookSignature(body, `invalid.${digest}`)).toBe(false);
 
-    expect(verifier.verifyWebhookSignature(body, signature, staleTimestamp)).toBe(false);
+    const oldTimestamp = String(Math.floor(Date.now() / 1000) - (60 * 60));
+    const oldSignature = createWebhookSignature(secret, body, oldTimestamp);
+    expect(verifier.verifyWebhookSignature(body, oldSignature, oldTimestamp)).toBe(false);
+
+    const noSecretVerifier = createBillingVerifier({
+      nodeEnv: 'development',
+      allowSandboxTokens: true
+    });
+    expect(noSecretVerifier.verifyWebhookSignature(body, dotSignature, timestamp)).toBe(false);
+  });
+
+  it('rejects missing and malformed webhook headers', () => {
+    const secret = 'webhook-secret';
+    const verifier = createBillingVerifier({
+      nodeEnv: 'development',
+      allowSandboxTokens: true,
+      webhookSecret: secret
+    });
+    const body = Buffer.from(JSON.stringify({ eventId: 'evt_3' }));
+    const timestamp = String(Math.floor(Date.now() / 1000));
+    const signature = createWebhookSignature(secret, body, timestamp);
+    const digest = signature.split('.')[1];
+
+    expect(verifier.verifyWebhookSignature(body, undefined)).toBe(false);
+    expect(verifier.verifyWebhookSignature(body, `v1=${digest}`)).toBe(false);
+    expect(verifier.verifyWebhookSignature(body, `not-a-number.${digest}`)).toBe(false);
+  });
+
+  it('falls back to the Apple sandbox verifier and can return an inactive purchase', async () => {
+    const now = new Date('2026-02-15T00:00:00.000Z');
+    let callCount = 0;
+
+    vi.stubGlobal('fetch', vi.fn(async () => {
+      callCount += 1;
+      if (callCount === 1) {
+        return new Response(JSON.stringify({ status: 21007 }), { status: 200 });
+      }
+
+      return new Response(JSON.stringify({
+        status: 0,
+        latest_receipt_info: [
+          {
+            product_id: 'moneta.pro.monthly',
+            expires_date_ms: String(now.getTime() + 60 * 60 * 1000),
+            cancellation_date_ms: String(now.getTime()),
+            transaction_id: 'tx_apple_1'
+          }
+        ]
+      }), { status: 200 });
+    }));
+
+    const verifier = createBillingVerifier({
+      nodeEnv: 'development',
+      allowSandboxTokens: false,
+      webhookSecret: 'webhook-secret',
+      appleSharedSecret: 'apple-shared-secret'
+    });
+
+    const purchase = await verifier.verifyPurchase({
+      platform: 'ios',
+      productId: 'moneta.pro.monthly',
+      purchaseToken: 'ios-receipt-token',
+      now
+    });
+
+    expect(purchase).toMatchObject({
+      source: 'ios',
+      productId: 'moneta.pro.monthly',
+      isActive: false,
+      verificationReference: 'tx_apple_1'
+    });
+  });
+
+  it('rejects Apple verification failures from provider responses and transport errors', async () => {
+    const now = new Date('2026-02-15T00:00:00.000Z');
+
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
+      status: 21010
+    }), { status: 200 })));
+
+    const verifier = createBillingVerifier({
+      nodeEnv: 'development',
+      allowSandboxTokens: false,
+      webhookSecret: 'webhook-secret',
+      appleSharedSecret: 'apple-shared-secret'
+    });
+
+    await expect(verifier.verifyPurchase({
+      platform: 'ios',
+      productId: 'moneta.pro.monthly',
+      purchaseToken: 'ios-receipt-token',
+      now
+    })).rejects.toThrow('Apple purchase could not be verified');
+
+    vi.stubGlobal('fetch', vi.fn(async () => {
+      throw new Error('network');
+    }));
+
+    await expect(verifier.verifyPurchase({
+      platform: 'ios',
+      productId: 'moneta.pro.monthly',
+      purchaseToken: 'ios-receipt-token',
+      now
+    })).rejects.toThrow('Billing provider request failed');
+  });
+
+  it('rejects Apple provider HTTP failures and empty verified receipts', async () => {
+    const now = new Date('2026-02-15T00:00:00.000Z');
+
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('provider-down', { status: 500 })));
+
+    const verifier = createBillingVerifier({
+      nodeEnv: 'development',
+      allowSandboxTokens: false,
+      webhookSecret: 'webhook-secret',
+      appleSharedSecret: 'apple-shared-secret'
+    });
+
+    await expect(verifier.verifyPurchase({
+      platform: 'ios',
+      productId: 'moneta.pro.monthly',
+      purchaseToken: 'ios-receipt-token',
+      now
+    })).rejects.toThrow('Billing provider request failed (500)');
+
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
+      status: 0,
+      latest_receipt_info: [],
+      receipt: {
+        in_app: []
+      }
+    }), { status: 200 })));
+
+    await expect(verifier.verifyPurchase({
+      platform: 'ios',
+      productId: 'moneta.pro.monthly',
+      purchaseToken: 'ios-receipt-token',
+      now
+    })).rejects.toThrow('Apple purchase could not be verified');
+  });
+
+  it('rejects malformed Google Play service-account configuration', async () => {
+    const now = new Date('2026-02-15T00:00:00.000Z');
+
+    const invalidJsonVerifier = createBillingVerifier({
+      nodeEnv: 'development',
+      allowSandboxTokens: false,
+      webhookSecret: 'webhook-secret',
+      googlePackageName: 'com.example.moneta',
+      googleServiceAccountJson: 'not-json'
+    });
+
+    await expect(invalidJsonVerifier.verifyPurchase({
+      platform: 'android',
+      productId: 'moneta.pro.monthly',
+      purchaseToken: 'android-purchase-token',
+      now
+    })).rejects.toThrow('Invalid GOOGLE_PLAY_SERVICE_ACCOUNT_JSON');
+
+    const invalidObjectVerifier = createBillingVerifier({
+      nodeEnv: 'development',
+      allowSandboxTokens: false,
+      webhookSecret: 'webhook-secret',
+      googlePackageName: 'com.example.moneta',
+      googleServiceAccountJson: 'null'
+    });
+
+    await expect(invalidObjectVerifier.verifyPurchase({
+      platform: 'android',
+      productId: 'moneta.pro.monthly',
+      purchaseToken: 'android-purchase-token',
+      now
+    })).rejects.toThrow('Invalid GOOGLE_PLAY_SERVICE_ACCOUNT_JSON');
+
+    const missingClientEmailVerifier = createBillingVerifier({
+      nodeEnv: 'development',
+      allowSandboxTokens: false,
+      webhookSecret: 'webhook-secret',
+      googlePackageName: 'com.example.moneta',
+      googleServiceAccountJson: JSON.stringify({ private_key: 'pk' })
+    });
+
+    await expect(missingClientEmailVerifier.verifyPurchase({
+      platform: 'android',
+      productId: 'moneta.pro.monthly',
+      purchaseToken: 'android-purchase-token',
+      now
+    })).rejects.toThrow('GOOGLE_PLAY_SERVICE_ACCOUNT_JSON missing client_email');
+
+    const missingPrivateKeyVerifier = createBillingVerifier({
+      nodeEnv: 'development',
+      allowSandboxTokens: false,
+      webhookSecret: 'webhook-secret',
+      googlePackageName: 'com.example.moneta',
+      googleServiceAccountJson: JSON.stringify({ client_email: 'billing-test@example.com' })
+    });
+
+    await expect(missingPrivateKeyVerifier.verifyPurchase({
+      platform: 'android',
+      productId: 'moneta.pro.monthly',
+      purchaseToken: 'android-purchase-token',
+      now
+    })).rejects.toThrow('GOOGLE_PLAY_SERVICE_ACCOUNT_JSON missing private_key');
+  });
+
+  it('rejects Google Play auth and purchase edge cases', async () => {
+    const now = new Date('2026-02-15T00:00:00.000Z');
+    const { privateKey } = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
+    const privateKeyPem = privateKey.export({ type: 'pkcs1', format: 'pem' }).toString();
+    const serviceAccountJson = JSON.stringify({
+      client_email: 'billing-test@example.com',
+      private_key: privateKeyPem,
+      token_uri: 'https://example.com/token'
+    });
+
+    vi.stubGlobal('fetch', vi.fn(async (url: string | URL, init?: RequestInit) => {
+      const urlString = typeof url === 'string' ? url : url.toString();
+
+      if (urlString === 'https://example.com/token' && init?.method === 'POST') {
+        return new Response(JSON.stringify({}), { status: 200 });
+      }
+
+      return new Response('not found', { status: 404 });
+    }));
+
+    const verifier = createBillingVerifier({
+      nodeEnv: 'development',
+      allowSandboxTokens: false,
+      webhookSecret: 'webhook-secret',
+      googlePackageName: 'com.example.moneta',
+      googleServiceAccountJson: serviceAccountJson,
+      googleTokenUrl: 'https://example.com/token'
+    });
+
+    await expect(verifier.verifyPurchase({
+      platform: 'android',
+      productId: 'moneta.pro.monthly',
+      purchaseToken: 'android-purchase-token',
+      now
+    })).rejects.toThrow('Google Play auth response was missing access_token');
+
+    vi.stubGlobal('fetch', vi.fn(async (url: string | URL, init?: RequestInit) => {
+      const urlString = typeof url === 'string' ? url : url.toString();
+
+      if (urlString === 'https://example.com/token' && init?.method === 'POST') {
+        return new Response(JSON.stringify({ access_token: 'test-access-token' }), { status: 200 });
+      }
+
+      if (urlString.includes('/purchases/subscriptionsv2/tokens/') && init?.method === 'GET') {
+        return new Response('gone', { status: 404 });
+      }
+
+      return new Response('not found', { status: 404 });
+    }));
+
+    await expect(verifier.verifyPurchase({
+      platform: 'android',
+      productId: 'moneta.pro.monthly',
+      purchaseToken: 'android-purchase-token',
+      now
+    })).rejects.toThrow('Google Play purchase was not found');
+
+    vi.stubGlobal('fetch', vi.fn(async (url: string | URL, init?: RequestInit) => {
+      const urlString = typeof url === 'string' ? url : url.toString();
+
+      if (urlString === 'https://example.com/token' && init?.method === 'POST') {
+        return new Response(JSON.stringify({ access_token: 'test-access-token' }), { status: 200 });
+      }
+
+      if (urlString.includes('/purchases/subscriptionsv2/tokens/') && init?.method === 'GET') {
+        return new Response(JSON.stringify({
+          subscriptionState: 'SUBSCRIPTION_STATE_IN_GRACE_PERIOD',
+          latestOrderId: 'order_123',
+          lineItems: [
+            {
+              productId: 'moneta.pro.monthly',
+              expiryTime: 'not-a-date'
+            }
+          ]
+        }), { status: 200 });
+      }
+
+      return new Response('not found', { status: 404 });
+    }));
+
+    await expect(verifier.verifyPurchase({
+      platform: 'android',
+      productId: 'moneta.pro.monthly',
+      purchaseToken: 'android-purchase-token',
+      now
+    })).rejects.toThrow('Google Play purchase was missing a valid expiry');
+  });
+
+  it('rejects missing Google Play config and provider transport failures', async () => {
+    const now = new Date('2026-02-15T00:00:00.000Z');
+    const { privateKey } = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
+    const privateKeyPem = privateKey.export({ type: 'pkcs1', format: 'pem' }).toString();
+    const serviceAccountJson = JSON.stringify({
+      client_email: 'billing-test@example.com',
+      private_key: privateKeyPem,
+      token_uri: 'https://example.com/token'
+    });
+
+    const missingConfigVerifier = createBillingVerifier({
+      nodeEnv: 'development',
+      allowSandboxTokens: false,
+      webhookSecret: 'webhook-secret'
+    });
+
+    await expect(missingConfigVerifier.verifyPurchase({
+      platform: 'android',
+      productId: 'moneta.pro.monthly',
+      purchaseToken: 'android-purchase-token',
+      now
+    })).rejects.toThrow('Google Play billing verification is not configured');
+
+    const verifier = createBillingVerifier({
+      nodeEnv: 'development',
+      allowSandboxTokens: false,
+      webhookSecret: 'webhook-secret',
+      googlePackageName: 'com.example.moneta',
+      googleServiceAccountJson: serviceAccountJson,
+      googleTokenUrl: 'https://example.com/token'
+    });
+
+    vi.stubGlobal('fetch', vi.fn(async (url: string | URL, init?: RequestInit) => {
+      const urlString = typeof url === 'string' ? url : url.toString();
+      if (urlString === 'https://example.com/token' && init?.method === 'POST') {
+        return new Response('auth failed', { status: 401 });
+      }
+      return new Response('not found', { status: 404 });
+    }));
+
+    await expect(verifier.verifyPurchase({
+      platform: 'android',
+      productId: 'moneta.pro.monthly',
+      purchaseToken: 'android-purchase-token',
+      now
+    })).rejects.toThrow('Billing provider auth failed (401)');
+
+    vi.stubGlobal('fetch', vi.fn(async () => {
+      throw new Error('token network');
+    }));
+
+    await expect(verifier.verifyPurchase({
+      platform: 'android',
+      productId: 'moneta.pro.monthly',
+      purchaseToken: 'android-purchase-token',
+      now
+    })).rejects.toThrow('Billing provider auth failed');
+
+    vi.stubGlobal('fetch', vi.fn(async (url: string | URL, init?: RequestInit) => {
+      const urlString = typeof url === 'string' ? url : url.toString();
+      if (urlString === 'https://example.com/token' && init?.method === 'POST') {
+        return new Response(JSON.stringify({ access_token: 'test-access-token' }), { status: 200 });
+      }
+      if (urlString.includes('/purchases/subscriptionsv2/tokens/') && init?.method === 'GET') {
+        return new Response('provider error', { status: 500 });
+      }
+      return new Response('not found', { status: 404 });
+    }));
+
+    await expect(verifier.verifyPurchase({
+      platform: 'android',
+      productId: 'moneta.pro.monthly',
+      purchaseToken: 'android-purchase-token',
+      now
+    })).rejects.toThrow('Google Play billing verification failed (500)');
+
+    vi.stubGlobal('fetch', vi.fn(async (url: string | URL, init?: RequestInit) => {
+      const urlString = typeof url === 'string' ? url : url.toString();
+      if (urlString === 'https://example.com/token' && init?.method === 'POST') {
+        return new Response(JSON.stringify({ access_token: 'test-access-token' }), { status: 200 });
+      }
+      if (urlString.includes('/purchases/subscriptionsv2/tokens/') && init?.method === 'GET') {
+        throw new Error('purchase network');
+      }
+      return new Response('not found', { status: 404 });
+    }));
+
+    await expect(verifier.verifyPurchase({
+      platform: 'android',
+      productId: 'moneta.pro.monthly',
+      purchaseToken: 'android-purchase-token',
+      now
+    })).rejects.toThrow('Google Play billing verification failed');
+  });
+
+  it('returns inactive Google Play purchases when the subscription state is no longer active', async () => {
+    const now = new Date('2026-02-15T00:00:00.000Z');
+    const { privateKey } = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
+    const privateKeyPem = privateKey.export({ type: 'pkcs1', format: 'pem' }).toString();
+    const serviceAccountJson = JSON.stringify({
+      client_email: 'billing-test@example.com',
+      private_key: privateKeyPem,
+      token_uri: 'https://example.com/token'
+    });
+
+    vi.stubGlobal('fetch', vi.fn(async (url: string | URL, init?: RequestInit) => {
+      const urlString = typeof url === 'string' ? url : url.toString();
+
+      if (urlString === 'https://example.com/token' && init?.method === 'POST') {
+        return new Response(JSON.stringify({ access_token: 'test-access-token' }), { status: 200 });
+      }
+
+      if (urlString.includes('/purchases/subscriptionsv2/tokens/') && init?.method === 'GET') {
+        return new Response(JSON.stringify({
+          subscriptionState: 'SUBSCRIPTION_STATE_CANCELED',
+          latestOrderId: 'order_456',
+          lineItems: [
+            {
+              productId: 'moneta.pro.monthly',
+              expiryTime: new Date(now.getTime() + 60 * 60 * 1000).toISOString()
+            }
+          ]
+        }), { status: 200 });
+      }
+
+      return new Response('not found', { status: 404 });
+    }));
+
+    const verifier = createBillingVerifier({
+      nodeEnv: 'development',
+      allowSandboxTokens: false,
+      webhookSecret: 'webhook-secret',
+      googlePackageName: 'com.example.moneta',
+      googleServiceAccountJson: serviceAccountJson,
+      googleTokenUrl: 'https://example.com/token'
+    });
+
+    const purchase = await verifier.verifyPurchase({
+      platform: 'android',
+      productId: 'moneta.pro.monthly',
+      purchaseToken: 'android-purchase-token',
+      now
+    });
+
+    expect(purchase).toMatchObject({
+      source: 'android',
+      productId: 'moneta.pro.monthly',
+      isActive: false,
+      verificationReference: 'order_456'
+    });
+  });
+
+  it('supports web sandbox purchases and rejects non-sandbox web verification', async () => {
+    const now = new Date('2026-02-15T00:00:00.000Z');
+    const verifier = createBillingVerifier({
+      nodeEnv: 'development',
+      allowSandboxTokens: true,
+      webhookSecret: 'webhook-secret'
+    });
+
+    const sandboxWeb = await verifier.verifyPurchase({
+      platform: 'web',
+      productId: 'moneta.pro.web',
+      purchaseToken: 'sandbox-web-12345',
+      now
+    });
+    expect(sandboxWeb.source).toBe('web');
+    expect(sandboxWeb.isActive).toBe(true);
+
+    const strictVerifier = createBillingVerifier({
+      nodeEnv: 'development',
+      allowSandboxTokens: false,
+      webhookSecret: 'webhook-secret'
+    });
+
+    await expect(strictVerifier.verifyPurchase({
+      platform: 'web',
+      productId: 'moneta.pro.web',
+      purchaseToken: 'web-purchase-token',
+      now
+    })).rejects.toThrow('Web billing verification is not configured');
   });
 });

@@ -7,6 +7,7 @@ import { RedisStore } from 'rate-limit-redis';
 import { createClient, type RedisClientType } from 'redis';
 import { createApp } from './app.js';
 import { createBillingVerifier } from './billing.verification.js';
+import { createEmailService } from './email.js';
 import { logError, logInfo } from './logger.js';
 import { MigrationRunner } from './migrations.js';
 import { InMemoryUserRepository } from './repository.memory.js';
@@ -172,6 +173,7 @@ async function main(): Promise<void> {
     minLength: 24
   });
   const trustProxy = parseBoolean(process.env.TRUST_PROXY, nodeEnv === 'production');
+  const emailService = createEmailService({ nodeEnv });
   const billingVerifier = createBillingVerifier({
     nodeEnv,
     allowSandboxTokens: parseBoolean(process.env.BILLING_ALLOW_SANDBOX_PURCHASES, nodeEnv !== 'production'),
@@ -189,6 +191,7 @@ async function main(): Promise<void> {
   const app = createApp({
     repository: repositoryResources.repository,
     billingVerifier,
+    emailService,
     jwtSecret,
     jwtRefreshSecret,
     jwtAccessTtlSeconds,

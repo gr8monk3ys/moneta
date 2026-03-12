@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import type express from 'express';
 import type { Request, Response } from 'express';
 import type { RateLimitRequestHandler } from 'express-rate-limit';
@@ -15,13 +16,13 @@ import {
   type AuthenticatedRequest
 } from '../auth.js';
 import { ApiError } from '../errors.js';
+import type { PasswordResetTokenRecord } from '../types.js';
 import type { RefreshTokenRecord } from '../types.js';
 import type { RouteDeps } from './types.js';
 
 const registerSchema = z.object({
   email: z.email(),
-  password: z.string().min(8),
-  userId: z.string().min(1)
+  password: z.string().min(8)
 });
 
 const loginSchema = z.object({
@@ -34,9 +35,25 @@ const refreshSchema = z.object({
   refreshToken: z.string().min(20)
 });
 
+const passwordResetRequestSchema = z.object({
+  email: z.email()
+});
+
+const passwordResetConfirmSchema = z.object({
+  email: z.email(),
+  code: z.string().min(8).max(8),
+  newPassword: z.string().min(8)
+});
+
 const deleteAccountSchema = z.object({
   confirmation: z.literal('DELETE_ACCOUNT')
 });
+
+function generateResetCode(length = 8): string {
+  const max = 10 ** length;
+  const value = crypto.randomInt(0, max);
+  return String(value).padStart(length, '0');
+}
 
 async function issueTokenPair(deps: RouteDeps, userId: string, email: string, sessionId: string) {
   const accessToken = createAccessToken(userId, email, deps.jwtSecret, deps.jwtAccessTtlSeconds);
@@ -61,13 +78,14 @@ async function registerHandler(req: Request, res: Response, deps: RouteDeps): Pr
     throw new ApiError(400, 'Invalid register payload', parsed.error.flatten());
   }
 
-  const { email, password, userId } = parsed.data;
+  const { email, password } = parsed.data;
   const normalizedEmail = email.toLowerCase();
   const existing = await deps.repository.getAuthUserByEmail(normalizedEmail);
   if (existing) {
     throw new ApiError(409, 'Email already registered');
   }
 
+  const userId = crypto.randomUUID();
   const passwordHash = await hashPassword(password);
   await deps.repository.createAuthUser({ userId, email: normalizedEmail, passwordHash });
   await deps.repository.upsertUserProfile({
@@ -80,6 +98,72 @@ async function registerHandler(req: Request, res: Response, deps: RouteDeps): Pr
   });
 
   res.status(201).json({ userId, email: normalizedEmail });
+}
+
+async function requestPasswordResetHandler(req: Request, res: Response, deps: RouteDeps): Promise<void> {
+  const parsed = passwordResetRequestSchema.safeParse(req.body);
+  if (!parsed.success) {
+    throw new ApiError(400, 'Invalid password reset payload', parsed.error.flatten());
+  }
+
+  const normalizedEmail = parsed.data.email.toLowerCase();
+  const user = await deps.repository.getAuthUserByEmail(normalizedEmail);
+
+  // Always return success to avoid leaking which emails are registered.
+  if (!user) {
+    res.status(200).json({ success: true });
+    return;
+  }
+
+  const nowIso = new Date().toISOString();
+  await deps.repository.pruneExpiredPasswordResetTokens(nowIso);
+  await deps.repository.deletePasswordResetTokensByUser(user.userId);
+
+  const code = generateResetCode(8);
+  const record: PasswordResetTokenRecord = {
+    tokenId: crypto.randomUUID(),
+    userId: user.userId,
+    tokenHash: hashToken(code),
+    createdAt: nowIso,
+    expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString()
+  };
+
+  await deps.repository.storePasswordResetToken(record);
+  await deps.emailService.sendPasswordResetCode({ to: user.email, code, expiresAt: record.expiresAt });
+
+  res.status(200).json({ success: true });
+}
+
+async function confirmPasswordResetHandler(req: Request, res: Response, deps: RouteDeps): Promise<void> {
+  const parsed = passwordResetConfirmSchema.safeParse(req.body);
+  if (!parsed.success) {
+    throw new ApiError(400, 'Invalid password reset payload', parsed.error.flatten());
+  }
+
+  const normalizedEmail = parsed.data.email.toLowerCase();
+  const user = await deps.repository.getAuthUserByEmail(normalizedEmail);
+  if (!user) {
+    throw new ApiError(401, 'Invalid or expired password reset code');
+  }
+
+  const nowIso = new Date().toISOString();
+  await deps.repository.pruneExpiredPasswordResetTokens(nowIso);
+
+  const consumed = await deps.repository.consumePasswordResetToken({
+    userId: user.userId,
+    tokenHash: hashToken(parsed.data.code.trim()),
+    nowIso
+  });
+
+  if (!consumed) {
+    throw new ApiError(401, 'Invalid or expired password reset code');
+  }
+
+  const passwordHash = await hashPassword(parsed.data.newPassword);
+  await deps.repository.updateAuthUserPassword(user.userId, passwordHash);
+  await deps.repository.revokeRefreshTokensByUser(user.userId);
+
+  res.status(200).json({ success: true });
 }
 
 async function loginHandler(req: Request, res: Response, deps: RouteDeps): Promise<void> {
@@ -169,6 +253,19 @@ async function exportAccountHandler(req: AuthenticatedRequest, res: Response, de
     throw new ApiError(404, 'User not found');
   }
 
+  const nowMs = Date.now();
+  const sessionTokens = refreshTokens.map((token) => {
+    const isActive = !token.revokedAt && new Date(token.expiresAt).getTime() > nowMs;
+    return {
+      tokenId: token.tokenId,
+      sessionId: token.sessionId,
+      createdAt: token.createdAt,
+      expiresAt: token.expiresAt,
+      revokedAt: token.revokedAt,
+      isActive
+    };
+  });
+
   res.status(200).json({
     userId,
     email,
@@ -176,8 +273,8 @@ async function exportAccountHandler(req: AuthenticatedRequest, res: Response, de
     profile,
     sessions: {
       total: refreshTokens.length,
-      active: refreshTokens.filter((token) => !token.revokedAt && new Date(token.expiresAt).getTime() > Date.now()).length,
-      refreshTokens
+      active: sessionTokens.filter((token) => token.isActive).length,
+      refreshTokens: sessionTokens
     },
     billing: {
       webhookEventsProcessed: billingEvents.length,
@@ -213,6 +310,14 @@ export function registerAuthRoutes(app: express.Express, deps: RouteDeps, authLi
 
   app.post('/api/auth/login', authLimiter, (req, res, next) => {
     loginHandler(req, res, deps).catch(next);
+  });
+
+  app.post('/api/auth/password/reset/request', authLimiter, (req, res, next) => {
+    requestPasswordResetHandler(req, res, deps).catch(next);
+  });
+
+  app.post('/api/auth/password/reset/confirm', authLimiter, (req, res, next) => {
+    confirmPasswordResetHandler(req, res, deps).catch(next);
   });
 
   app.post('/api/auth/refresh', authLimiter, (req, res, next) => {

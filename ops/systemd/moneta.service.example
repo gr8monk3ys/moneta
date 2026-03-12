@@ -1,0 +1,30 @@
+[Unit]
+Description=Moneta API
+After=network.target
+
+[Service]
+Type=simple
+
+# Run from the "current" symlink so deploys are atomic.
+WorkingDirectory=/srv/moneta/current
+
+# Load environment exported by the deploy script symlink.
+EnvironmentFile=/srv/moneta/current/.env
+
+ExecStart=/usr/bin/node dist/server.js
+
+Restart=always
+RestartSec=5
+TimeoutStopSec=30
+KillSignal=SIGTERM
+
+# Tighten if desired (may require additional allowlists depending on your host).
+NoNewPrivileges=true
+PrivateTmp=true
+
+User=moneta
+Group=moneta
+
+[Install]
+WantedBy=multi-user.target
+

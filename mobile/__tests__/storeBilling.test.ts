@@ -1,189 +1,338 @@
-const mockFetchProducts = jest.fn();
-const mockInitConnection = jest.fn();
-const mockEndConnection = jest.fn();
-const mockRequestPurchase = jest.fn();
-const mockFinishTransaction = jest.fn();
-const mockGetReceiptIOS = jest.fn();
-const mockRestorePurchases = jest.fn();
-const mockGetAvailablePurchases = jest.fn();
+import * as expoIap from 'expo-iap';
+import { Platform } from 'react-native';
+import {
+  disconnectStoreBilling,
+  listSubscriptionProducts,
+  purchasePrimarySubscription,
+  restoreLatestSubscription
+} from '../src/lib/storeBilling';
 
-jest.mock('expo-iap', () => ({
-  fetchProducts: (...args: unknown[]) => mockFetchProducts(...args),
-  initConnection: (...args: unknown[]) => mockInitConnection(...args),
-  endConnection: (...args: unknown[]) => mockEndConnection(...args),
-  requestPurchase: (...args: unknown[]) => mockRequestPurchase(...args),
-  finishTransaction: (...args: unknown[]) => mockFinishTransaction(...args),
-  getReceiptIOS: (...args: unknown[]) => mockGetReceiptIOS(...args),
-  restorePurchases: (...args: unknown[]) => mockRestorePurchases(...args),
-  getAvailablePurchases: (...args: unknown[]) => mockGetAvailablePurchases(...args)
-}));
+const originalEnv = { ...process.env };
+const originalPlatform = Platform.OS;
 
-const mockPlatformState: { OS: string } = { OS: 'ios' };
-jest.mock('react-native', () => ({
-  Platform: mockPlatformState
-}));
+function setPlatform(os: 'ios' | 'android' | 'web') {
+  Object.defineProperty(Platform, 'OS', {
+    configurable: true,
+    value: os
+  });
+}
 
-describe('storeBilling', () => {
+function restoreEnv() {
+  for (const key of Object.keys(process.env)) {
+    if (!(key in originalEnv)) {
+      delete process.env[key];
+    }
+  }
+
+  Object.assign(process.env, originalEnv);
+}
+
+describe('store billing helpers', () => {
   beforeEach(() => {
-    jest.resetModules();
     jest.clearAllMocks();
-    mockPlatformState.OS = 'ios';
-    process.env.NODE_ENV = 'test';
-    delete process.env.EXPO_PUBLIC_IOS_SUBSCRIPTION_PRODUCT_IDS;
-    delete process.env.EXPO_PUBLIC_ANDROID_SUBSCRIPTION_PRODUCT_IDS;
+    restoreEnv();
+  });
+
+  afterEach(async () => {
+    restoreEnv();
+    setPlatform(originalPlatform as 'ios' | 'android' | 'web');
+    await disconnectStoreBilling();
+  });
+
+  it('returns sandbox products on unsupported platforms when sandbox mode is enabled', async () => {
+    setPlatform('web');
+    process.env.EXPO_PUBLIC_BILLING_SANDBOX_MODE = 'true';
+
+    const products = await listSubscriptionProducts();
+
+    expect(products).toEqual([
+      {
+        productId: 'moneta.pro.monthly',
+        title: 'Moneta Pro',
+        description: 'Sandbox purchase mode',
+        displayPrice: 'Sandbox'
+      }
+    ]);
+  });
+
+  it('throws on unsupported platforms when sandbox mode is disabled', async () => {
+    setPlatform('web');
+    process.env.EXPO_PUBLIC_BILLING_SANDBOX_MODE = 'false';
+
+    await expect(listSubscriptionProducts()).rejects.toThrow('In-app purchases are unavailable on this platform.');
+    await expect(purchasePrimarySubscription('user-1')).rejects.toThrow('In-app purchases are only available on iOS and Android builds.');
+  });
+
+  it('defaults sandbox mode off for production builds when no override is set', async () => {
+    setPlatform('web');
     delete process.env.EXPO_PUBLIC_BILLING_SANDBOX_MODE;
+    process.env.NODE_ENV = 'production';
+
+    await expect(listSubscriptionProducts()).rejects.toThrow('In-app purchases are unavailable on this platform.');
   });
 
-  it('returns sandbox catalog in non-mobile runtime when sandbox mode is enabled', async () => {
-    mockPlatformState.OS = 'web';
-    const billing = require('../src/lib/storeBilling');
+  it('uses sandbox fallbacks on native platforms when store SKUs are not configured', async () => {
+    setPlatform('ios');
+    delete process.env.EXPO_PUBLIC_IOS_SUBSCRIPTION_PRODUCT_IDS;
+    process.env.EXPO_PUBLIC_BILLING_SANDBOX_MODE = 'true';
 
-    const products = await billing.listSubscriptionProducts();
+    const products = await listSubscriptionProducts();
+    expect(products[0]?.productId).toBe('moneta.pro.monthly');
 
-    expect(products).toHaveLength(1);
-    expect(products[0].displayPrice).toBe('Sandbox');
+    const purchased = await purchasePrimarySubscription('user-1');
+    expect(purchased).toMatchObject({
+      platform: 'ios',
+      productId: 'moneta.pro.monthly',
+      sandbox: true
+    });
+
+    const restored = await restoreLatestSubscription();
+    expect(restored).toMatchObject({
+      platform: 'ios',
+      productId: 'moneta.pro.monthly',
+      sandbox: true
+    });
   });
 
-  it('lists configured ios products and maps catalog fields', async () => {
+  it('lists, purchases, restores, and disconnects iOS subscriptions', async () => {
+    setPlatform('ios');
     process.env.EXPO_PUBLIC_IOS_SUBSCRIPTION_PRODUCT_IDS = 'moneta.pro.monthly,moneta.pro.yearly';
-    mockFetchProducts.mockResolvedValueOnce([
+
+    (expoIap.fetchProducts as jest.Mock).mockResolvedValue([
       {
         id: 'moneta.pro.monthly',
-        title: 'Moneta Monthly',
-        description: 'Monthly',
-        displayPrice: '$9.99'
+        title: 'Moneta Pro Monthly',
+        displayName: 'Moneta Pro Monthly',
+        description: 'Monthly access',
+        displayPrice: '$7.99'
       },
       {
         id: 'moneta.pro.yearly',
-        title: 'Moneta Yearly',
-        description: 'Yearly',
-        displayPrice: '$79.99'
+        title: 'Moneta Pro Yearly',
+        displayName: 'Moneta Pro Yearly',
+        description: 'Yearly access',
+        displayPrice: '$59.99'
+      }
+    ]);
+    (expoIap.requestPurchase as jest.Mock).mockResolvedValue([
+      {
+        productId: 'moneta.pro.monthly',
+        purchaseToken: 'purchase-token',
+        transactionDate: 10
+      }
+    ]);
+    (expoIap.getReceiptIOS as jest.Mock).mockResolvedValue('ios-receipt');
+
+    const catalog = await listSubscriptionProducts();
+    expect(catalog).toHaveLength(2);
+    expect(expoIap.initConnection).toHaveBeenCalledTimes(1);
+
+    const purchase = await purchasePrimarySubscription('user-1');
+    expect(purchase).toEqual({
+      platform: 'ios',
+      productId: 'moneta.pro.monthly',
+      purchaseToken: 'ios-receipt',
+      sandbox: false
+    });
+    expect(expoIap.requestPurchase).toHaveBeenCalledWith({
+      type: 'subs',
+      request: {
+        apple: {
+          sku: 'moneta.pro.monthly'
+        }
+      }
+    });
+    expect(expoIap.finishTransaction).toHaveBeenCalled();
+
+    const restored = await restoreLatestSubscription();
+    expect(restored).toEqual({
+      platform: 'ios',
+      productId: 'moneta.pro.monthly',
+      purchaseToken: 'ios-receipt',
+      sandbox: false
+    });
+
+    await disconnectStoreBilling();
+    expect(expoIap.endConnection).toHaveBeenCalledTimes(1);
+  });
+
+  it('throws for missing iOS store config and incomplete App Store purchases', async () => {
+    setPlatform('ios');
+    process.env.EXPO_PUBLIC_BILLING_SANDBOX_MODE = 'false';
+    delete process.env.EXPO_PUBLIC_IOS_SUBSCRIPTION_PRODUCT_IDS;
+
+    await expect(listSubscriptionProducts()).rejects.toThrow('Set EXPO_PUBLIC_IOS_SUBSCRIPTION_PRODUCT_IDS for store billing.');
+    await expect(purchasePrimarySubscription('user-1')).rejects.toThrow('Set EXPO_PUBLIC_IOS_SUBSCRIPTION_PRODUCT_IDS for store billing.');
+    await expect(restoreLatestSubscription()).rejects.toThrow('Set EXPO_PUBLIC_IOS_SUBSCRIPTION_PRODUCT_IDS for store billing.');
+
+    process.env.EXPO_PUBLIC_IOS_SUBSCRIPTION_PRODUCT_IDS = 'moneta.pro.monthly';
+    (expoIap.fetchProducts as jest.Mock).mockResolvedValue([
+      {
+        id: 'moneta.pro.monthly',
+        title: 'Moneta Pro Monthly',
+        displayName: 'Moneta Pro Monthly',
+        description: 'Monthly access',
+        displayPrice: '$7.99'
+      }
+    ]);
+    (expoIap.requestPurchase as jest.Mock).mockResolvedValue(null);
+
+    await expect(purchasePrimarySubscription('user-1')).rejects.toThrow('Purchase was not completed by the App Store.');
+
+    (expoIap.requestPurchase as jest.Mock).mockResolvedValue([
+      {
+        productId: 'moneta.pro.monthly',
+        purchaseToken: 'purchase-token',
+        transactionDate: 10
+      }
+    ]);
+    (expoIap.getReceiptIOS as jest.Mock).mockResolvedValue(null);
+
+    await expect(purchasePrimarySubscription('user-1')).rejects.toThrow('Could not load App Store receipt for verification.');
+  });
+
+  it('returns null when restoring iOS purchases without a receipt', async () => {
+    setPlatform('ios');
+    process.env.EXPO_PUBLIC_IOS_SUBSCRIPTION_PRODUCT_IDS = 'moneta.pro.monthly';
+    (expoIap.getReceiptIOS as jest.Mock).mockResolvedValue(null);
+
+    await expect(restoreLatestSubscription()).resolves.toBeNull();
+  });
+
+  it('purchases and restores Android subscriptions with offer tokens', async () => {
+    setPlatform('android');
+    process.env.EXPO_PUBLIC_ANDROID_SUBSCRIPTION_PRODUCT_IDS = 'moneta.pro.monthly';
+
+    (expoIap.fetchProducts as jest.Mock).mockResolvedValue([
+      {
+        id: 'moneta.pro.monthly',
+        title: 'Moneta Pro Monthly',
+        displayName: 'Moneta Pro Monthly',
+        description: 'Monthly access',
+        displayPrice: '$7.99',
+        subscriptionOffers: [{ offerTokenAndroid: 'offer-token-1' }]
+      }
+    ]);
+    (expoIap.requestPurchase as jest.Mock).mockResolvedValue({
+      productId: 'moneta.pro.monthly',
+      purchaseToken: 'android-purchase-token',
+      transactionDate: 20
+    });
+    (expoIap.getAvailablePurchases as jest.Mock).mockResolvedValue([
+      {
+        productId: 'moneta.pro.monthly',
+        purchaseToken: 'android-restore-token',
+        transactionDate: 30
       }
     ]);
 
-    const billing = require('../src/lib/storeBilling');
-    const products = await billing.listSubscriptionProducts();
-
-    expect(mockInitConnection).toHaveBeenCalledTimes(1);
-    expect(products.map((p) => p.productId)).toEqual(['moneta.pro.monthly', 'moneta.pro.yearly']);
-  });
-
-  it('purchases iOS subscription and returns receipt payload', async () => {
-    process.env.EXPO_PUBLIC_IOS_SUBSCRIPTION_PRODUCT_IDS = 'moneta.pro.monthly';
-    mockRequestPurchase.mockResolvedValueOnce({
-      productId: 'moneta.pro.monthly',
-      purchaseToken: 'token',
-      transactionDate: Date.now()
-    });
-    mockGetReceiptIOS.mockResolvedValueOnce('ios-receipt-token');
-
-    const billing = require('../src/lib/storeBilling');
-    const payload = await billing.purchasePrimarySubscription('user-1');
-
-    expect(mockFinishTransaction).toHaveBeenCalled();
-    expect(payload).toMatchObject({
-      platform: 'ios',
-      productId: 'moneta.pro.monthly',
-      purchaseToken: 'ios-receipt-token',
-      sandbox: false
-    });
-  });
-
-  it('restores android purchase and returns latest token', async () => {
-    mockPlatformState.OS = 'android';
-    process.env.EXPO_PUBLIC_ANDROID_SUBSCRIPTION_PRODUCT_IDS = 'moneta.pro.monthly';
-    mockRestorePurchases.mockResolvedValueOnce(undefined);
-    mockGetAvailablePurchases.mockResolvedValueOnce([
-      { productId: 'other', purchaseToken: 'x', transactionDate: 1 },
-      { productId: 'moneta.pro.monthly', purchaseToken: 'android-token', transactionDate: 2 }
-    ]);
-
-    const billing = require('../src/lib/storeBilling');
-    const payload = await billing.restoreLatestSubscription();
-
-    expect(payload).toMatchObject({
+    const purchase = await purchasePrimarySubscription('user-1');
+    expect(purchase).toEqual({
       platform: 'android',
       productId: 'moneta.pro.monthly',
-      purchaseToken: 'android-token',
+      purchaseToken: 'android-purchase-token',
+      sandbox: false
+    });
+    expect(expoIap.requestPurchase).toHaveBeenCalledWith({
+      type: 'subs',
+      request: {
+        google: {
+          skus: ['moneta.pro.monthly'],
+          obfuscatedAccountId: 'user-1',
+          subscriptionOffers: [{ sku: 'moneta.pro.monthly', offerToken: 'offer-token-1' }]
+        }
+      }
+    });
+
+    const restored = await restoreLatestSubscription();
+    expect(restored).toEqual({
+      platform: 'android',
+      productId: 'moneta.pro.monthly',
+      purchaseToken: 'android-restore-token',
       sandbox: false
     });
   });
 
-
-
-  it('throws when iap unavailable and sandbox mode disabled', async () => {
-    mockPlatformState.OS = 'web';
-    process.env.EXPO_PUBLIC_BILLING_SANDBOX_MODE = 'false';
-
-    const billing = require('../src/lib/storeBilling');
-
-    await expect(billing.listSubscriptionProducts()).rejects.toThrow('In-app purchases are unavailable on this platform.');
-  });
-
-  it('throws when sku config missing and sandbox disabled on mobile', async () => {
-    process.env.EXPO_PUBLIC_BILLING_SANDBOX_MODE = 'false';
-    const billing = require('../src/lib/storeBilling');
-
-    await expect(billing.listSubscriptionProducts()).rejects.toThrow('Set EXPO_PUBLIC_IOS_SUBSCRIPTION_PRODUCT_IDS');
-  });
-
-  it('returns sandbox purchase payload when skus missing and sandbox enabled', async () => {
-    mockPlatformState.OS = 'android';
-    const billing = require('../src/lib/storeBilling');
-
-    const payload = await billing.purchasePrimarySubscription('user-2');
-    expect(payload.platform).toBe('android');
-    expect(payload.sandbox).toBe(true);
-    expect(payload.purchaseToken).toContain('sandbox-android-');
-  });
-
-  it('throws when iOS receipt is missing after purchase', async () => {
-    process.env.EXPO_PUBLIC_IOS_SUBSCRIPTION_PRODUCT_IDS = 'moneta.pro.monthly';
-    mockRequestPurchase.mockResolvedValueOnce({
-      productId: 'moneta.pro.monthly',
-      purchaseToken: 'token',
-      transactionDate: Date.now()
-    });
-    mockGetReceiptIOS.mockResolvedValueOnce('');
-
-    const billing = require('../src/lib/storeBilling');
-    await expect(billing.purchasePrimarySubscription('user-1')).rejects.toThrow('Could not load App Store receipt');
-  });
-
-  it('throws when android purchase token is missing', async () => {
-    mockPlatformState.OS = 'android';
+  it('handles Android fallback purchase selection and empty restore results', async () => {
+    setPlatform('android');
     process.env.EXPO_PUBLIC_ANDROID_SUBSCRIPTION_PRODUCT_IDS = 'moneta.pro.monthly';
-    mockFetchProducts.mockResolvedValueOnce([{ id: 'moneta.pro.monthly', subscriptionOffers: [] }]);
-    mockRequestPurchase.mockResolvedValueOnce({
-      productId: 'moneta.pro.monthly',
-      purchaseToken: '',
-      transactionDate: Date.now()
-    });
 
-    const billing = require('../src/lib/storeBilling');
-    await expect(billing.purchasePrimarySubscription('user-2')).rejects.toThrow('Purchase token was not returned by Google Play.');
-  });
-
-  it('returns null when restore has no purchase token', async () => {
-    mockPlatformState.OS = 'android';
-    process.env.EXPO_PUBLIC_ANDROID_SUBSCRIPTION_PRODUCT_IDS = 'moneta.pro.monthly';
-    mockRestorePurchases.mockResolvedValueOnce(undefined);
-    mockGetAvailablePurchases.mockResolvedValueOnce([{ productId: 'moneta.pro.monthly', purchaseToken: '', transactionDate: 2 }]);
-
-    const billing = require('../src/lib/storeBilling');
-    await expect(billing.restoreLatestSubscription()).resolves.toBeNull();
-  });
-
-  it('disconnects store billing only when initialized', async () => {
-    process.env.EXPO_PUBLIC_IOS_SUBSCRIPTION_PRODUCT_IDS = 'moneta.pro.monthly';
-    mockFetchProducts.mockResolvedValueOnce([
-      { id: 'moneta.pro.monthly', title: 't', description: 'd', displayPrice: '$1' }
+    (expoIap.fetchProducts as jest.Mock).mockResolvedValue([
+      {
+        id: 'moneta.pro.monthly',
+        title: '',
+        displayName: '',
+        description: '',
+        displayPrice: ''
+      }
+    ]);
+    (expoIap.requestPurchase as jest.Mock).mockResolvedValue([
+      {
+        productId: 'older-product',
+        purchaseToken: 'old-token',
+        transactionDate: 10
+      },
+      {
+        productId: 'newest-product',
+        purchaseToken: 'new-token',
+        transactionDate: 20
+      }
+    ]);
+    (expoIap.getAvailablePurchases as jest.Mock).mockResolvedValue([
+      {
+        productId: 'older-product',
+        purchaseToken: '   ',
+        transactionDate: 30
+      }
     ]);
 
-    const billing = require('../src/lib/storeBilling');
-    await billing.listSubscriptionProducts();
-    await billing.disconnectStoreBilling();
+    const products = await listSubscriptionProducts();
+    expect(products).toEqual([
+      {
+        productId: 'moneta.pro.monthly',
+        title: 'moneta.pro.monthly',
+        description: 'Moneta Pro subscription',
+        displayPrice: 'See store'
+      }
+    ]);
 
-    expect(mockEndConnection).toHaveBeenCalledTimes(1);
+    const purchase = await purchasePrimarySubscription('user-1');
+    expect(purchase).toEqual({
+      platform: 'android',
+      productId: 'newest-product',
+      purchaseToken: 'new-token',
+      sandbox: false
+    });
+
+    const restored = await restoreLatestSubscription();
+    expect(restored).toBeNull();
+  });
+
+  it('throws for missing Android store config and tokenless Google Play purchases', async () => {
+    setPlatform('android');
+    process.env.EXPO_PUBLIC_BILLING_SANDBOX_MODE = 'false';
+    delete process.env.EXPO_PUBLIC_ANDROID_SUBSCRIPTION_PRODUCT_IDS;
+
+    await expect(listSubscriptionProducts()).rejects.toThrow('Set EXPO_PUBLIC_ANDROID_SUBSCRIPTION_PRODUCT_IDS for store billing.');
+    await expect(purchasePrimarySubscription('user-1')).rejects.toThrow('Set EXPO_PUBLIC_ANDROID_SUBSCRIPTION_PRODUCT_IDS for store billing.');
+    await expect(restoreLatestSubscription()).rejects.toThrow('Set EXPO_PUBLIC_ANDROID_SUBSCRIPTION_PRODUCT_IDS for store billing.');
+
+    process.env.EXPO_PUBLIC_ANDROID_SUBSCRIPTION_PRODUCT_IDS = 'moneta.pro.monthly';
+    (expoIap.fetchProducts as jest.Mock).mockResolvedValue([
+      {
+        id: 'moneta.pro.monthly',
+        title: 'Moneta Pro Monthly',
+        displayName: 'Moneta Pro Monthly',
+        description: 'Monthly access',
+        displayPrice: '$7.99'
+      }
+    ]);
+    (expoIap.requestPurchase as jest.Mock).mockResolvedValue({
+      productId: 'moneta.pro.monthly',
+      purchaseToken: '   ',
+      transactionDate: 20
+    });
+
+    await expect(purchasePrimarySubscription('user-1')).rejects.toThrow('Purchase token was not returned by Google Play.');
   });
 });

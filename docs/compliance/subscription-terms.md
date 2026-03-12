@@ -1,50 +1,64 @@
-# Moneta Subscription Terms (Draft)
+# Moneta Subscription Terms
 
-Effective date: `<set before publication>`
+Effective date: `To be set at publication`
 
-This draft is a technical baseline and must be reviewed by legal counsel before store submission.
+This is a launch draft based on the current Moneta subscription model. Legal counsel should review and finalize it before publication.
 
-## 1) Subscription product
+## 1. Overview
 
-Moneta offers premium subscription features billed through Apple App Store and/or Google Play.
+Moneta offers a free learning experience and paid subscription options under `Moneta Pro`.
 
-## 2) Trial and billing
+Paid subscriptions are billed through Apple App Store and/or Google Play, depending on platform availability.
 
-- Trial availability and duration are shown in the app/store listing.
-- Subscription renews automatically unless canceled before renewal date.
-- Billing, renewal timing, taxes, and refund handling follow the applicable store policy.
+## 2. What a subscription unlocks
 
-## 3) Pricing
+Moneta Pro is intended to unlock additional learning access beyond the free tier, including advanced tracks, expanded review access, and other premium learning features shown in the app or store listing at the time of purchase.
 
-- Prices are shown in-app or in store listing at purchase time.
-- Prices may vary by region/currency and may change for future periods per store policy.
+Specific features may change over time as the product evolves.
 
-## 4) Cancellation
+## 3. Billing and renewal
 
-- Users cancel through Apple/Google subscription settings.
-- Cancellation stops future renewals; access continues through the paid period end.
+- Subscription pricing is shown at purchase time in the app or store listing.
+- Subscription periods may be monthly, yearly, or another interval shown at checkout.
+- Subscriptions renew automatically unless canceled before the renewal date.
+- Billing timing, taxes, and renewals are controlled by the applicable app store platform.
 
-## 5) Restores and entitlement validation
+## 4. Trials, promotions, and pricing changes
 
-- Users can restore purchases from the app.
-- Entitlements are verified server-side and may be adjusted if provider status changes (expired, refunded, revoked).
+- Any free trial, introductory offer, or promotional pricing is shown at the time of purchase.
+- Prices may vary by region, platform, taxes, or currency.
+- Future pricing changes are handled subject to the relevant app store rules.
 
-## 6) Account requirement
+## 5. Cancellation and refunds
 
-An active Moneta account is required to access subscription features and sync progress.
+- Users manage subscriptions through their Apple or Google account settings.
+- Canceling a subscription stops future renewals but does not retroactively cancel the current paid period.
+- Refunds, if any, are governed by Apple or Google policies unless otherwise required by law.
 
-## 7) Service changes
+## 6. Restore and entitlement verification
 
-Features may evolve over time. Material changes impacting paid access will be communicated in-app or by policy update.
+- Users may restore eligible purchases from within the app.
+- Moneta may verify entitlement status server-side.
+- Access may be adjusted if a subscription expires, is refunded, is revoked, or cannot be verified.
 
-## 8) Acceptable use
+## 7. Account requirement
 
-Users must not abuse authentication, entitlement, or API systems, or attempt fraudulent purchase manipulation.
+An active Moneta account is required to access subscription-linked features and sync learning progress.
 
-## 9) Limitation and warranty
+Deleting a Moneta account does not automatically cancel an App Store or Google Play subscription.
 
-Service is provided under applicable law and store platform terms. Add jurisdiction-specific legal language before publication.
+## 8. Service changes
 
-## 10) Contact
+Moneta may change, improve, or retire features over time. Material changes affecting paid access should be communicated in-app, in policy updates, or through store channels as required by law.
 
-Support contact: `<support@your-domain>`
+## 9. Acceptable use
+
+Users must not abuse subscription, billing, entitlement, or authentication systems, or attempt to bypass paid access controls.
+
+## 10. Educational nature of the service
+
+Subscriptions unlock app features only. They do not change the educational-only nature of Moneta and do not provide personalized financial advice.
+
+## 11. Contact
+
+Support contact: `<set published support contact before launch>`

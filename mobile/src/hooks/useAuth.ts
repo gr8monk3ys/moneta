@@ -1,4 +1,5 @@
 import * as SecureStore from 'expo-secure-store';
+import { Platform } from 'react-native';
 import { useEffect, useMemo, useState } from 'react';
 
 const AUTH_STORAGE_KEY = 'moneta.auth.state';
@@ -10,13 +11,54 @@ interface AuthState {
   sessionId: string;
 }
 
-async function persistAuth(auth: AuthState | null): Promise<void> {
-  if (!auth) {
-    await SecureStore.deleteItemAsync(AUTH_STORAGE_KEY);
+function readWebStorage(): Storage | null {
+  if (Platform.OS !== 'web' || typeof globalThis.localStorage === 'undefined') {
+    return null;
+  }
+
+  return globalThis.localStorage;
+}
+
+async function getStoredAuth(): Promise<string | null> {
+  const storage = readWebStorage();
+  if (storage) {
+    try {
+      return storage.getItem(AUTH_STORAGE_KEY);
+    } catch {
+      return null;
+    }
+  }
+
+  return SecureStore.getItemAsync(AUTH_STORAGE_KEY);
+}
+
+async function setStoredAuth(value: string): Promise<void> {
+  const storage = readWebStorage();
+  if (storage) {
+    storage.setItem(AUTH_STORAGE_KEY, value);
     return;
   }
 
-  await SecureStore.setItemAsync(AUTH_STORAGE_KEY, JSON.stringify(auth));
+  await SecureStore.setItemAsync(AUTH_STORAGE_KEY, value);
+}
+
+async function clearStoredAuth(): Promise<void> {
+  const storage = readWebStorage();
+  if (storage) {
+    storage.removeItem(AUTH_STORAGE_KEY);
+    return;
+  }
+
+  await SecureStore.deleteItemAsync(AUTH_STORAGE_KEY);
+}
+
+async function persistAuth(auth: AuthState | null): Promise<void> {
+  if (!auth) {
+    await clearStoredAuth();
+    return;
+  }
+
+  await setStoredAuth(JSON.stringify(auth));
 }
 
 export function useAuthState() {
@@ -24,7 +66,7 @@ export function useAuthState() {
   const [bootstrapping, setBootstrapping] = useState(true);
 
   useEffect(() => {
-    SecureStore.getItemAsync(AUTH_STORAGE_KEY)
+    getStoredAuth()
       .then((raw) => {
         if (!raw) {
           return;

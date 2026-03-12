@@ -9,13 +9,19 @@
     "android": "expo start --android",
     "web": "expo start --web",
     "lint": "eslint . --ext .ts,.tsx",
+    "typecheck": "tsc --noEmit",
     "test": "jest",
     "test:coverage": "jest --coverage --runInBand",
     "test:ci": "jest --coverage --runInBand"
   },
   "dependencies": {
     "@expo/metro-runtime": "~6.1.2",
+    "@react-navigation/bottom-tabs": "^7.13.0",
+    "@react-navigation/native": "^7.1.28",
+    "@react-navigation/native-stack": "^7.12.0",
+    "@tanstack/react-query": "^5.90.21",
     "expo": "~54.0.33",
+    "expo-dev-client": "~6.0.20",
     "expo-iap": "^3.4.9",
     "expo-linear-gradient": "~15.0.8",
     "expo-secure-store": "~15.0.8",
@@ -23,7 +29,9 @@
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-native": "0.81.5",
+    "react-native-gesture-handler": "~2.28.0",
     "react-native-safe-area-context": "^5.6.1",
+    "react-native-screens": "~4.16.0",
     "react-native-web": "^0.21.0"
   },
   "devDependencies": {
@@ -43,7 +51,8 @@
     "typescript": "^5.9.3"
   },
   "overrides": {
-    "tar": "7.5.8",
-    "qs": "6.14.2"
+    "tar": "7.5.11",
+    "qs": "6.14.2",
+    "minimatch": "10.2.4"
   }
 }

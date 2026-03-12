@@ -1,0 +1,79 @@
+import nodemailer from 'nodemailer';
+import { logInfo } from './logger.js';
+
+export interface EmailService {
+  sendPasswordResetCode(input: { to: string; code: string; expiresAt: string }): Promise<void>;
+}
+
+function isNonEmptyString(value: string | undefined): value is string {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+export function createEmailService(options: { nodeEnv: string }): EmailService {
+  const nodeEnv = options.nodeEnv;
+  const host = process.env.SMTP_HOST?.trim();
+
+  if (!isNonEmptyString(host)) {
+    if (nodeEnv === 'production') {
+      throw new Error('SMTP_HOST must be set in production to enable password reset emails');
+    }
+
+    return {
+      sendPasswordResetCode: async ({ to, code, expiresAt }) => {
+        logInfo({
+          message: 'password_reset_email',
+          to,
+          code,
+          expiresAt,
+          note: 'SMTP is not configured; using console email service.'
+        });
+      }
+    };
+  }
+
+  const port = Number(process.env.SMTP_PORT ?? 587);
+  if (!Number.isFinite(port) || port <= 0) {
+    throw new Error('SMTP_PORT must be a valid number');
+  }
+
+  const secure = (process.env.SMTP_SECURE ?? '').toLowerCase() === 'true' || port === 465;
+  const user = process.env.SMTP_USER?.trim();
+  const pass = process.env.SMTP_PASS?.trim();
+  const from = process.env.SMTP_FROM?.trim();
+
+  if (nodeEnv === 'production') {
+    if (!isNonEmptyString(from)) {
+      throw new Error('SMTP_FROM must be set in production');
+    }
+    if (!isNonEmptyString(user) || !isNonEmptyString(pass)) {
+      throw new Error('SMTP_USER and SMTP_PASS must be set in production');
+    }
+  }
+
+  const transport = nodemailer.createTransport({
+    host,
+    port,
+    secure,
+    ...(isNonEmptyString(user) && isNonEmptyString(pass) ? { auth: { user, pass } } : {})
+  });
+
+  return {
+    sendPasswordResetCode: async ({ to, code, expiresAt }) => {
+      const expiresLabel = new Date(expiresAt).toLocaleString('en-US', { timeZone: 'UTC' });
+      await transport.sendMail({
+        from: from || 'no-reply@moneta.local',
+        to,
+        subject: 'Moneta password reset code',
+        text: [
+          'Your Moneta password reset code:',
+          '',
+          code,
+          '',
+          `This code expires at ${expiresLabel} UTC.`,
+          'If you did not request this, you can ignore this email.'
+        ].join('\n')
+      });
+    }
+  };
+}
+

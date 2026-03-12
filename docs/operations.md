@@ -6,6 +6,7 @@
 
 ## Deploy and rollback
 - `.github/workflows/deploy.yml` runs production preflight checks, performs deployment, and validates health checks.
+- `.github/workflows/deploy-staging.yml` deploys the staging environment (branch `work` by default) with a staging-specific preflight.
 - If deploy fails health checks, rollback job runs automatically.
 - Deployment logic is defined in `scripts/deploy.sh`.
 - Rollback logic is defined in `scripts/rollback.sh`.
@@ -50,10 +51,16 @@
 - Follow `docs/external-go-live-execution-guide.md` for command-by-command external execution.
 
 ## Production readiness verification
+- Run `npm run check:docs` before release review to validate required docs, local markdown links, and portable repo references.
 - Run `./scripts/production-readiness-check.sh` before deployment to validate required production environment variables and reject insecure defaults.
 - This script is intended as a preflight guardrail and should be wired into your deploy pipeline.
 - Generate a redacted environment evidence artifact with `./scripts/generate-redacted-env-report.sh` for release records.
 - Use `./scripts/collect-release-evidence.sh` to capture consolidated pass/fail logs and artifacts in one run.
+
+## Staging environment
+
+- Staging setup guide: `docs/staging-environment-setup.md`
+- Staging preflight guardrail: `./scripts/staging-readiness-check.sh`
 
 ## Final release verification gate
 - Run `./scripts/final-verification-gate.sh` before release go/no-go.

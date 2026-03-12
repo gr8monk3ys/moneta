@@ -4,14 +4,19 @@ An iOS / Android finance-learning platform.
 
 ## Product documentation
 
+- [Documentation Index](docs/README.md)
 - [Product Requirements Document](docs/product-requirements-document.md)
 - [MVP API Documentation](docs/api.md)
 - [Operations Guide](docs/operations.md)
 - [Go-Live Checklist](docs/go-live-checklist.md)
+- [Launch Inputs Handoff Template](docs/launch-inputs-handoff-template.md)
+- [Launch Missing Values Checklist](docs/launch-missing-values-checklist.md)
+- [Brand Identity](docs/brand/identity.md)
+- [Content Readiness Summary](docs/content-readiness.md)
 - [Release Evidence Template](docs/release-evidence-template.md)
 - [Release Evidence Summary (2026-02-13)](docs/release-evidence-2026-02-13.md)
-- [Content Inventory (2026-02-13)](docs/content-inventory-2026-02-13.md)
-- [Content Editorial Review Report (2026-02-13)](docs/content-editorial-review-2026-02-13.md)
+- [Content Inventory (2026-02-14)](docs/content-inventory-2026-02-14.md)
+- [Content Editorial Review Report (2026-02-14)](docs/content-editorial-review-2026-02-14.md)
 - [Observability Production Setup](docs/observability-production-setup.md)
 - [Secret Rotation Policy](docs/security-secret-rotation-policy.md)
 - [External Go-Live Execution Guide](docs/external-go-live-execution-guide.md)
@@ -35,6 +40,25 @@ An iOS / Android finance-learning platform.
 - `src/` - backend API
 - `src/content/curriculum.generated.json` - externalized curriculum content source
 - `mobile/` - Expo mobile app (iOS/Android/Web)
+- `public/marketing/` - static landing-page assets served from `/`
+
+## Marketing landing page
+
+Run the backend locally and open `http://localhost:3000/` to view the Moneta marketing site.
+
+If port `3000` is already in use on your machine, run the backend with an alternate port, for example:
+
+```bash
+PORT=3100 npm run dev
+```
+
+Optional landing-page launch links can be supplied with:
+
+- `MARKETING_IOS_URL`
+- `MARKETING_ANDROID_URL`
+- `MARKETING_WAITLIST_URL`
+- `MARKETING_PRIVACY_URL`
+- `MARKETING_TERMS_URL`
 
 ## Mobile app quick start (Expo)
 
@@ -118,6 +142,10 @@ Branch protection scripts:
 - `./scripts/verify-branch-protection.sh [branch]`
 - `./scripts/collect-release-evidence.sh`
 
+## Documentation validation
+
+- Run `npm run check:docs` to verify required docs exist, internal markdown links resolve, and no local-only filesystem paths have leaked into repo docs.
+- Run `./scripts/launch-doc-readiness-check.sh` only after real legal, support, store, and release values have been supplied.
 
 ## CI test commands
 

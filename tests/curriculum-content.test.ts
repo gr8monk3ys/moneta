@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { listCurriculum } from '../src/data.js';
+import { createDefaultEntitlement } from '../src/billing.js';
+import { getLessonById, getNextLessonForLevel, getNextLessonForProgress, isLessonCompleted, listCurriculum } from '../src/data.js';
 
 describe('curriculum content depth', () => {
   it('meets MVP target ranges for lesson and item volume', () => {
@@ -38,5 +39,39 @@ describe('curriculum content depth', () => {
     });
 
     expect(mixedFormatLessons.length).toBeGreaterThanOrEqual(30);
+  });
+
+  it('supports curriculum lookup and next-lesson helpers', () => {
+    const freeCurriculum = listCurriculum(false);
+    expect(freeCurriculum.every((lesson) => !lesson.premium)).toBe(true);
+
+    const lesson = getLessonById('lesson-cash-flow-f1-001');
+    expect(lesson?.title).toBe('Cash Flow Basics');
+    expect(getLessonById('missing-lesson')).toBeUndefined();
+
+    const fallbackLesson = getNextLessonForLevel('F6', false);
+    expect(fallbackLesson).toBeDefined();
+    expect(fallbackLesson?.premium).toBe(false);
+
+    const user = {
+      userId: 'u1',
+      currentLevel: 'F1' as const,
+      streakDays: 0,
+      entitlement: createDefaultEntitlement(),
+      completedLessons: {
+        'lesson-cash-flow-f1-001': {
+          lessonId: 'lesson-cash-flow-f1-001',
+          completedAt: '2026-01-01T00:00:00.000Z',
+          score: 1,
+          correctCount: 6,
+          totalItems: 6
+        }
+      },
+      skills: {}
+    };
+
+    expect(isLessonCompleted(user, 'lesson-cash-flow-f1-001')).toBe(true);
+    expect(isLessonCompleted(user, 'lesson-credit-scores-f1-002')).toBe(false);
+    expect(getNextLessonForProgress(user, false)?.lessonId).not.toBe('lesson-cash-flow-f1-001');
   });
 });

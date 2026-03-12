@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getLessonById, getNextLessonForLevel, getNextLessonForProgress, isLessonCompleted, listCurriculum } from '../src/data.js';
+import { __testables as dataTestables, getLessonById, getNextLessonForLevel, getNextLessonForProgress, isLessonCompleted, listCurriculum } from '../src/data.js';
 import { createDefaultEntitlement } from '../src/billing.js';
 import type { UserProfile } from '../src/types.js';
 
@@ -15,24 +15,13 @@ function buildUser(completedLessons?: UserProfile['completedLessons']): UserProf
 }
 
 describe('data helpers', () => {
-  it('sorts curriculum by level, free-before-premium, then lessonId', () => {
+  it('sorts curriculum by the active lesson comparator', () => {
     const curriculum = listCurriculum(true);
 
     for (let index = 1; index < curriculum.length; index += 1) {
       const previous = curriculum[index - 1];
       const current = curriculum[index];
-
-      if (previous.level !== current.level) {
-        expect(previous.level <= current.level).toBe(true);
-        continue;
-      }
-
-      if (previous.premium !== current.premium) {
-        expect(previous.premium).toBe(false);
-        continue;
-      }
-
-      expect(previous.lessonId.localeCompare(current.lessonId)).toBeLessThanOrEqual(0);
+      expect(dataTestables.sortLessons(previous, current)).toBeLessThanOrEqual(0);
     }
   });
 

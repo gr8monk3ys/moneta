@@ -1,4 +1,10 @@
-import type { AuthUser, BillingWebhookEventRecord, RefreshTokenRecord, UserProfile } from './types.js';
+import type {
+  AuthUser,
+  BillingWebhookEventRecord,
+  PasswordResetTokenRecord,
+  RefreshTokenRecord,
+  UserProfile
+} from './types.js';
 
 export interface ConsumeRefreshTokenInput {
   tokenId: string;
@@ -8,10 +14,17 @@ export interface ConsumeRefreshTokenInput {
   nowIso: string;
 }
 
+export interface ConsumePasswordResetTokenInput {
+  userId: string;
+  tokenHash: string;
+  nowIso: string;
+}
+
 export interface UserRepository {
   createAuthUser(user: AuthUser): Promise<AuthUser>;
   getAuthUserByEmail(email: string): Promise<AuthUser | null>;
   getAuthUserById(userId: string): Promise<AuthUser | null>;
+  updateAuthUserPassword(userId: string, passwordHash: string): Promise<void>;
   getUserProfile(userId: string): Promise<UserProfile | null>;
   upsertUserProfile(profile: UserProfile): Promise<UserProfile>;
   storeRefreshToken(record: RefreshTokenRecord): Promise<void>;
@@ -21,6 +34,10 @@ export interface UserRepository {
   revokeRefreshToken(tokenId: string): Promise<void>;
   revokeRefreshTokensByUser(userId: string): Promise<void>;
   revokeRefreshTokensBySession(userId: string, sessionId: string): Promise<void>;
+  deletePasswordResetTokensByUser(userId: string): Promise<void>;
+  storePasswordResetToken(record: PasswordResetTokenRecord): Promise<void>;
+  consumePasswordResetToken(input: ConsumePasswordResetTokenInput): Promise<PasswordResetTokenRecord | null>;
+  pruneExpiredPasswordResetTokens(nowIso: string): Promise<number>;
   hasProcessedBillingWebhookEvent(eventId: string): Promise<boolean>;
   listBillingWebhookEventsByUser(userId: string): Promise<BillingWebhookEventRecord[]>;
   markBillingWebhookEventProcessed(record: BillingWebhookEventRecord): Promise<void>;

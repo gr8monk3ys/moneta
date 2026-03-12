@@ -27,7 +27,7 @@ describe('Moneta mobile app', () => {
 
   it('shows login screen when unauthenticated', () => {
     const screen = render(<App />);
-    expect(screen.getByText('Duolingo for Finance')).toBeTruthy();
+    expect(screen.getByText('Build money confidence in 5-minute lessons')).toBeTruthy();
   });
 
   it('shows tabs when authenticated', () => {

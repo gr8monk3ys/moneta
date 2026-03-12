@@ -9,6 +9,10 @@ required_vars=(
   METRICS_TOKEN
   CORS_ORIGINS
   BILLING_WEBHOOK_SECRET
+  SMTP_HOST
+  SMTP_USER
+  SMTP_PASS
+  SMTP_FROM
 )
 
 is_weak_secret() {

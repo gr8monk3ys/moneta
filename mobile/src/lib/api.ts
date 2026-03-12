@@ -1,18 +1,10 @@
 const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env;
+const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
+const baseUrl = env?.EXPO_PUBLIC_API_BASE_URL ?? (isDev ? 'http://localhost:3000' : '');
 
-function resolveApiBaseUrl(): string {
-  const configured = env?.EXPO_PUBLIC_API_BASE_URL?.trim();
-  const normalized = configured && configured.length > 0 ? configured.replace(/\/$/, '') : 'http://localhost:3000';
-
-  const isReactNativeRuntime = typeof navigator !== 'undefined' && navigator.product === 'ReactNative';
-  if (isReactNativeRuntime && normalized.includes('localhost')) {
-    console.warn('EXPO_PUBLIC_API_BASE_URL uses localhost. Use your LAN IP for physical devices.');
-  }
-
-  return normalized;
+if (!baseUrl) {
+  throw new Error('EXPO_PUBLIC_API_BASE_URL is required for non-dev builds.');
 }
-
-const baseUrl = resolveApiBaseUrl();
 
 interface AuthPayload {
   email: string;
@@ -65,9 +57,22 @@ export interface ProgressResponse {
   totalLessons?: number;
 }
 
+export interface TodayReviewItem {
+  itemId: string;
+  skillId: string;
+  dueDate: string;
+  contentItemId?: string;
+  prompt?: string;
+  format?: 'mcq' | 'numeric' | 'scenario';
+  choices?: string[];
+  explanation?: string;
+  locked?: boolean;
+}
+
 export interface TodayResponse {
   userId: string;
-  dueReviews: Array<{ itemId: string; skillId: string; dueDate: string }>;
+  dueReviews: TodayReviewItem[];
+  practiceReviews?: TodayReviewItem[];
   nextLesson?: { lessonId: string; title: string; estimatedMinutes: number };
   entitlement: Entitlement;
   features: FeatureAccess;
@@ -118,10 +123,15 @@ interface PlacementResponse {
   level: string;
 }
 
+export type SessionItemResult =
+  | { skillId: string; isCorrect: boolean }
+  | { skillId: string; itemId: string; answer: string };
+
 interface SessionResponse {
   userId: string;
   streakDays: number;
   scheduledReviews: Array<{ itemId: string; skillId: string; dueDate: string }>;
+  gradedItems?: Array<{ skillId: string; itemId?: string; answer?: string; isCorrect: boolean }>;
   lessonProgress?: {
     lessonId: string;
     completed: boolean;
@@ -159,11 +169,11 @@ export interface AccountExportResponse {
     active: number;
     refreshTokens: Array<{
       tokenId: string;
-      userId: string;
       sessionId: string;
       createdAt: string;
       expiresAt: string;
       revokedAt?: string;
+      isActive: boolean;
     }>;
   };
   billing: {
@@ -192,15 +202,28 @@ async function parseError(response: Response): Promise<never> {
   throw new Error(body.error ?? 'Request failed');
 }
 
+function normalizeRequestError(error: unknown): Error {
+  if (error instanceof Error && /Failed to fetch|Network request failed|Load failed/i.test(error.message)) {
+    return new Error("Couldn't reach Moneta. Check your connection and app configuration.");
+  }
+
+  return error instanceof Error ? error : new Error('Request failed');
+}
+
 async function postJson<T>(path: string, payload: unknown, token?: string): Promise<T> {
-  const response = await fetch(`${baseUrl}${path}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {})
-    },
-    body: JSON.stringify(payload)
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${baseUrl}${path}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      },
+      body: JSON.stringify(payload)
+    });
+  } catch (error) {
+    throw normalizeRequestError(error);
+  }
 
   if (!response.ok) {
     return parseError(response);
@@ -210,14 +233,19 @@ async function postJson<T>(path: string, payload: unknown, token?: string): Prom
 }
 
 async function deleteJson<T>(path: string, payload: unknown, token?: string): Promise<T> {
-  const response = await fetch(`${baseUrl}${path}`, {
-    method: 'DELETE',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {})
-    },
-    body: JSON.stringify(payload)
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${baseUrl}${path}`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      },
+      body: JSON.stringify(payload)
+    });
+  } catch (error) {
+    throw normalizeRequestError(error);
+  }
 
   if (!response.ok) {
     return parseError(response);
@@ -227,9 +255,14 @@ async function deleteJson<T>(path: string, payload: unknown, token?: string): Pr
 }
 
 async function getJson<T>(path: string, token?: string): Promise<T> {
-  const response = await fetch(`${baseUrl}${path}`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : undefined
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${baseUrl}${path}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined
+    });
+  } catch (error) {
+    throw normalizeRequestError(error);
+  }
 
   if (!response.ok) {
     return parseError(response);
@@ -286,12 +319,20 @@ export async function probeBackend(): Promise<{ health: string; ready: string }>
   return { health: health.status, ready: ready.status };
 }
 
-export async function register(payload: { userId: string; email: string; password: string }): Promise<void> {
-  await postJson('/api/auth/register', payload);
+export async function register(payload: { email: string; password: string }): Promise<{ userId: string; email: string }> {
+  return postJson<{ userId: string; email: string }>('/api/auth/register', payload);
 }
 
 export async function login(payload: AuthPayload): Promise<AuthResponse> {
   return postJson<AuthResponse>('/api/auth/login', payload);
+}
+
+export async function requestPasswordReset(payload: { email: string }): Promise<{ success: boolean }> {
+  return postJson<{ success: boolean }>('/api/auth/password/reset/request', payload);
+}
+
+export async function confirmPasswordReset(payload: { email: string; code: string; newPassword: string }): Promise<{ success: boolean }> {
+  return postJson<{ success: boolean }>('/api/auth/password/reset/confirm', payload);
 }
 
 export async function refresh(refreshToken: string): Promise<AuthResponse> {
@@ -348,7 +389,7 @@ export async function submitPlacement(auth: AuthContext, score: { correctAnswers
 
 export async function completeSession(
   auth: AuthContext,
-  itemResults: Array<{ skillId: string; isCorrect: boolean }>,
+  itemResults: SessionItemResult[],
   options: { lessonId?: string; timeZone?: string } = {}
 ): Promise<SessionResponse> {
   return withAuthRetry(auth, (token) => postJson<SessionResponse>(

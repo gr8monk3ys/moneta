@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { useQuery } from '@tanstack/react-query';
 import { fetchProgress, type AuthContext } from '../lib/api';
+import { getLevelMeta } from '../lib/learningMetadata';
+import { queryKeys } from '../lib/queryKeys';
 import { theme } from '../lib/theme';
 
 interface ProgressScreenProps {
@@ -21,31 +23,12 @@ function formatError(error: unknown): string {
 }
 
 export function ProgressScreen(props: ProgressScreenProps) {
-  const [viewModel, setViewModel] = useState<ProgressViewModel | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const progressQuery = useQuery({
+    queryKey: queryKeys.progress(props.userId),
+    queryFn: () => fetchProgress(props.userId, props.auth)
+  });
 
-  useEffect(() => {
-    fetchProgress(props.userId, props.auth)
-      .then((progress) => {
-        const masteryValue = progress.totalSkills === 0 ? 0 : Math.round((progress.masteredSkills / progress.totalSkills) * 100);
-        setViewModel({
-          level: progress.currentLevel,
-          skills: `${progress.masteredSkills}/${progress.totalSkills}`,
-          mastery: `${masteryValue}%`,
-          streak: `${progress.streakDays}`,
-          plan: progress.plan === 'pro' && progress.premiumActive ? 'Pro' : 'Free'
-        });
-      })
-      .catch((reason) => {
-        setError(formatError(reason));
-      })
-      .finally(() => {
-        setLoading(false);
-      });
-  }, [props.auth, props.userId]);
-
-  if (loading) {
+  if (progressQuery.isPending) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator color={theme.accent} />
@@ -53,23 +36,37 @@ export function ProgressScreen(props: ProgressScreenProps) {
     );
   }
 
-  if (!viewModel) {
+  if (!progressQuery.data) {
     return (
       <View style={styles.container}>
-        <Text style={styles.error}>{error ?? 'Unable to load progress'}</Text>
+        <Text style={styles.error}>{progressQuery.error ? formatError(progressQuery.error) : 'Unable to load progress'}</Text>
       </View>
     );
   }
+
+  const progress = progressQuery.data;
+  const levelMeta = getLevelMeta(progress.currentLevel);
+  const masteryValue = progress.totalSkills === 0 ? 0 : Math.round((progress.masteredSkills / progress.totalSkills) * 100);
+  const hasStarted = progress.totalSkills > 0;
+  const viewModel: ProgressViewModel = {
+    level: levelMeta.title,
+    skills: hasStarted ? `${progress.masteredSkills}/${progress.totalSkills}` : 'Ready',
+    mastery: hasStarted ? `${masteryValue}%` : 'Start',
+    streak: `${progress.streakDays}`,
+    plan: progress.plan === 'pro' && progress.premiumActive ? 'Pro' : 'Free'
+  };
 
   return (
     <View style={styles.container}>
       <View style={styles.ringCard}>
         <Text style={styles.level}>{viewModel.level}</Text>
         <Text style={styles.plan}>Plan: {viewModel.plan}</Text>
-        <Text style={styles.subtitle}>Everyday Decision-Making</Text>
+        <Text style={styles.subtitle}>
+          {hasStarted ? levelMeta.description : 'Complete your first lesson to unlock progress stats.'}
+        </Text>
       </View>
       <View style={styles.statsRow}>
-        <View style={styles.stat}><Text style={styles.statValue}>{viewModel.skills}</Text><Text style={styles.statLabel}>Skills</Text></View>
+        <View style={styles.stat}><Text style={styles.statValue}>{viewModel.skills}</Text><Text style={styles.statLabel}>{hasStarted ? 'Concepts' : 'First Lesson'}</Text></View>
         <View style={styles.stat}><Text style={styles.statValue}>{viewModel.mastery}</Text><Text style={styles.statLabel}>Mastery</Text></View>
         <View style={styles.stat}><Text style={styles.statValue}>{viewModel.streak}</Text><Text style={styles.statLabel}>Streak</Text></View>
       </View>

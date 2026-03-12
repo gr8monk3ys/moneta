@@ -4,6 +4,7 @@ import { LearnScreen } from '../src/screens/LearnScreen';
 import { ProgressScreen } from '../src/screens/ProgressScreen';
 import * as api from '../src/lib/api';
 import * as storeBilling from '../src/lib/storeBilling';
+import { renderWithQueryClient } from './testUtils';
 
 jest.mock('../src/lib/api', () => ({
   ...jest.requireActual('../src/lib/api'),
@@ -114,17 +115,17 @@ describe('mobile presentational components', () => {
   });
 
   it('renders learn and progress screens', async () => {
-    const learn = render(<LearnScreen userId="u1" auth={auth} />);
+    const learn = renderWithQueryClient(<LearnScreen userId="u1" auth={auth} onOpenLesson={jest.fn()} />);
     expect(learn.getByText('Learning Path')).toBeTruthy();
 
     await waitFor(() => {
       expect(learn.getByText('Up next: Next Up')).toBeTruthy();
-      expect(learn.getByText('1. Money Basics')).toBeTruthy();
+      expect(learn.getByText('Money Basics')).toBeTruthy();
     });
 
-    const progress = render(<ProgressScreen userId="u1" auth={auth} />);
+    const progress = renderWithQueryClient(<ProgressScreen userId="u1" auth={auth} />);
     await waitFor(() => {
-      expect(progress.getByText('Everyday Decision-Making')).toBeTruthy();
+      expect(progress.getByText('Everyday Decisions')).toBeTruthy();
       expect(progress.getByText('2/4')).toBeTruthy();
       expect(progress.getByText('50%')).toBeTruthy();
       expect(progress.getByText('7')).toBeTruthy();

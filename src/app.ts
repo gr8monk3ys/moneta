@@ -1,10 +1,13 @@
 import cors from 'cors';
 import express from 'express';
+import path from 'node:path';
 import rateLimit, { type Store } from 'express-rate-limit';
 import helmet from 'helmet';
 import { createBillingVerifier, type BillingVerifier } from './billing.verification.js';
+import type { EmailService } from './email.js';
 import { ApiError } from './errors.js';
 import { requestLogger, type RequestLoggerRequest } from './logger.js';
+import { renderMarketingPage, renderRobotsTxt, renderSitemapXml } from './marketingSite.js';
 import { metricsMiddleware } from './metrics.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import type { UserRepository } from './repository.js';
@@ -17,6 +20,7 @@ import type { RouteDeps } from './routes/types.js';
 interface AppOptions {
   repository: UserRepository;
   billingVerifier?: BillingVerifier;
+  emailService?: EmailService;
   jwtSecret: string;
   jwtRefreshSecret: string;
   jwtAccessTtlSeconds: number;
@@ -46,6 +50,12 @@ function parseAllowedOrigins(origins: string[]): cors.CorsOptions {
 
 export function createApp(options: AppOptions): express.Express {
   const app = express();
+  const publicDir = path.resolve(process.cwd(), 'public');
+  const emailService: EmailService = options.emailService ?? {
+    sendPasswordResetCode: async () => {
+      throw new ApiError(500, 'Email service is not configured');
+    }
+  };
   const deps: RouteDeps = {
     repository: options.repository,
     billingVerifier: options.billingVerifier ?? createBillingVerifier({
@@ -53,6 +63,7 @@ export function createApp(options: AppOptions): express.Express {
       allowSandboxTokens: true,
       webhookSecret: 'dev-billing-webhook-secret'
     }),
+    emailService,
     jwtSecret: options.jwtSecret,
     jwtRefreshSecret: options.jwtRefreshSecret,
     jwtAccessTtlSeconds: options.jwtAccessTtlSeconds,
@@ -79,6 +90,10 @@ export function createApp(options: AppOptions): express.Express {
   app.disable('x-powered-by');
   app.set('trust proxy', options.trustProxy);
   app.use(helmet());
+  app.use('/marketing', express.static(path.join(publicDir, 'marketing'), {
+    immutable: true,
+    maxAge: '7d'
+  }));
   app.use(requestLogger());
   app.use(metricsMiddleware());
   app.use(cors(parseAllowedOrigins(options.allowedOrigins)));
@@ -89,6 +104,18 @@ export function createApp(options: AppOptions): express.Express {
     }
   }));
   app.use('/api', apiLimiter);
+
+  app.get('/', (req, res) => {
+    res.type('html').send(renderMarketingPage(req));
+  });
+
+  app.get('/robots.txt', (req, res) => {
+    res.type('text/plain').send(renderRobotsTxt(req));
+  });
+
+  app.get('/sitemap.xml', (req, res) => {
+    res.type('application/xml').send(renderSitemapXml(req));
+  });
 
   registerSystemRoutes(app, deps);
   registerAuthRoutes(app, deps, authLimiter);

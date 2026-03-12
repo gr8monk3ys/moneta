@@ -1,11 +1,18 @@
 import { normalizeEntitlement } from './billing.js';
 import { users } from './data.js';
-import type { ConsumeRefreshTokenInput, UserRepository } from './repository.js';
-import type { AuthUser, BillingWebhookEventRecord, RefreshTokenRecord, UserProfile } from './types.js';
+import type { ConsumePasswordResetTokenInput, ConsumeRefreshTokenInput, UserRepository } from './repository.js';
+import type {
+  AuthUser,
+  BillingWebhookEventRecord,
+  PasswordResetTokenRecord,
+  RefreshTokenRecord,
+  UserProfile
+} from './types.js';
 
 export class InMemoryUserRepository implements UserRepository {
   private readonly authUsersByEmail: Map<string, AuthUser> = new Map();
   private readonly refreshTokens: Map<string, RefreshTokenRecord> = new Map();
+  private readonly passwordResetTokens: Map<string, PasswordResetTokenRecord> = new Map();
   private readonly billingWebhookEvents: Map<string, BillingWebhookEventRecord> = new Map();
 
   public async createAuthUser(user: AuthUser): Promise<AuthUser> {
@@ -25,6 +32,22 @@ export class InMemoryUserRepository implements UserRepository {
     }
 
     return null;
+  }
+
+  public async updateAuthUserPassword(userId: string, passwordHash: string): Promise<void> {
+    for (const user of this.authUsersByEmail.values()) {
+      if (user.userId !== userId) {
+        continue;
+      }
+
+      this.authUsersByEmail.set(user.email.toLowerCase(), {
+        ...user,
+        passwordHash
+      });
+      return;
+    }
+
+    throw new Error('User not found');
   }
 
   public async getUserProfile(userId: string): Promise<UserProfile | null> {
@@ -126,6 +149,55 @@ export class InMemoryUserRepository implements UserRepository {
     }
   }
 
+  public async deletePasswordResetTokensByUser(userId: string): Promise<void> {
+    for (const [tokenId, record] of this.passwordResetTokens.entries()) {
+      if (record.userId === userId) {
+        this.passwordResetTokens.delete(tokenId);
+      }
+    }
+  }
+
+  public async storePasswordResetToken(record: PasswordResetTokenRecord): Promise<void> {
+    this.passwordResetTokens.set(record.tokenId, record);
+  }
+
+  public async consumePasswordResetToken(input: ConsumePasswordResetTokenInput): Promise<PasswordResetTokenRecord | null> {
+    const nowMs = new Date(input.nowIso).getTime();
+    const candidates = [...this.passwordResetTokens.values()]
+      .filter((record) => record.userId === input.userId && record.tokenHash === input.tokenHash)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    const record = candidates[0];
+    if (!record) {
+      return null;
+    }
+
+    if (record.usedAt || new Date(record.expiresAt).getTime() <= nowMs) {
+      return null;
+    }
+
+    this.passwordResetTokens.set(record.tokenId, {
+      ...record,
+      usedAt: input.nowIso
+    });
+
+    return record;
+  }
+
+  public async pruneExpiredPasswordResetTokens(nowIso: string): Promise<number> {
+    let removed = 0;
+    const nowMs = new Date(nowIso).getTime();
+
+    for (const [tokenId, record] of this.passwordResetTokens.entries()) {
+      if (new Date(record.expiresAt).getTime() <= nowMs) {
+        this.passwordResetTokens.delete(tokenId);
+        removed += 1;
+      }
+    }
+
+    return removed;
+  }
+
   public async hasProcessedBillingWebhookEvent(eventId: string): Promise<boolean> {
     return this.billingWebhookEvents.has(eventId);
   }
@@ -153,6 +225,12 @@ export class InMemoryUserRepository implements UserRepository {
     for (const [tokenId, token] of this.refreshTokens.entries()) {
       if (token.userId === userId) {
         this.refreshTokens.delete(tokenId);
+      }
+    }
+
+    for (const [tokenId, token] of this.passwordResetTokens.entries()) {
+      if (token.userId === userId) {
+        this.passwordResetTokens.delete(tokenId);
       }
     }
 

@@ -95,11 +95,11 @@ describe('API end-to-end smoke', () => {
 
   it('completes auth, learning, and readiness smoke flow over HTTP', async () => {
     const register = await postJson<{ userId: string }>('/api/auth/register', {
-      userId: 'e2e-user',
       email: 'e2e@example.com',
       password: 'password123'
     });
     expect(register.status).toBe(201);
+    const userId = register.body.userId;
 
     const login = await postJson<{ accessToken: string; refreshToken: string }>('/api/auth/login', {
       email: 'e2e@example.com',
@@ -110,12 +110,12 @@ describe('API end-to-end smoke', () => {
     expect(login.body.accessToken).toBeTruthy();
     expect(login.body.refreshToken).toBeTruthy();
 
-    const today = await fetch(`${baseUrl}/api/learn/today/e2e-user`, {
+    const today = await fetch(`${baseUrl}/api/learn/today/${userId}`, {
       headers: { Authorization: `Bearer ${login.body.accessToken}` }
     });
     expect(today.status).toBe(200);
 
-    const progress = await fetch(`${baseUrl}/api/progress/e2e-user`, {
+    const progress = await fetch(`${baseUrl}/api/progress/${userId}`, {
       headers: { Authorization: `Bearer ${login.body.accessToken}` }
     });
     expect(progress.status).toBe(200);
@@ -126,7 +126,6 @@ describe('API end-to-end smoke', () => {
 
   it('enforces refresh token rotation in live HTTP flow', async () => {
     await postJson('/api/auth/register', {
-      userId: 'e2e-refresh-user',
       email: 'e2e-refresh@example.com',
       password: 'password123'
     });
@@ -152,16 +151,16 @@ describe('API end-to-end smoke', () => {
   });
 
   it('processes billing webhook reconciliation with signature and idempotency', async () => {
-    const register = await postJson('/api/auth/register', {
-      userId: 'e2e-billing-user',
+    const register = await postJson<{ userId: string }>('/api/auth/register', {
       email: 'e2e-billing@example.com',
       password: 'password123'
     });
     expect(register.status).toBe(201);
+    const userId = register.body.userId;
 
     const payload = {
       eventId: 'e2e-webhook-event-1',
-      userId: 'e2e-billing-user',
+      userId,
       platform: 'ios',
       productId: 'moneta.pro.monthly',
       isActive: true,
