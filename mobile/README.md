@@ -23,7 +23,7 @@ npm run start
 
 ## Backend connection
 
-Set `EXPO_PUBLIC_API_BASE_URL` to your backend URL.
+Set `EXPO_PUBLIC_API_BASE_URL` to your backend URL. The app logs a runtime warning if `localhost` is used in a React Native runtime.
 
 - Local simulator (same machine): `http://localhost:3000`
 - Physical iPhone device: use your machine LAN IP, for example `http://192.168.1.15:3000`
@@ -73,7 +73,7 @@ Optional local fallback:
 npm run lint
 npm run typecheck
 npm run test
-npm run test:coverage -- --runInBand
+npm run test:ci
 ```
 
 ## Production env templates

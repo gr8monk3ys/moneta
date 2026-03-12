@@ -32,10 +32,13 @@ An iOS / Android finance-learning platform.
 - [Parallel Agent Closeout Plan (2026-02-13)](docs/parallel-agent-closeout-2026-02-13.md)
 - [Multi-Agent Execution Plan](docs/multi-agent-execution-plan.md)
 - [PR Acceptance Checklist](docs/pr-acceptance-checklist.md)
+- [Production Readiness Checklist v2](docs/production-readiness-checklist-v2.md)
+- [Release Go/No-Go Matrix](docs/release-go-no-go-matrix.md)
 
 ## Repository layout
 
 - `src/` - backend API
+- `src/content/curriculum.generated.json` - externalized curriculum content source
 - `mobile/` - Expo mobile app (iOS/Android/Web)
 - `public/marketing/` - static landing-page assets served from `/`
 
@@ -65,6 +68,8 @@ npm install
 cp .env.example .env
 npm run start
 ```
+
+> The mobile app warns at runtime if `EXPO_PUBLIC_API_BASE_URL` is `localhost` on a physical device.
 
 Then run on target:
 
@@ -114,7 +119,7 @@ Backend:
 Production readiness helper:
 
 - Run `./scripts/production-readiness-check.sh` in your deployment environment to verify required env vars and secure defaults before promoting traffic.
-- Run `./scripts/final-verification-gate.sh` before release sign-off to validate backend/mobile lint, tests, build, integration tests, and high/critical security audit gates.
+- Run `./scripts/final-verification-gate.sh` before release sign-off to validate backend/mobile lint, tests, build, integration tests, coverage thresholds, and high/critical security audit gates.
 - If you intentionally need to skip integration tests locally, set `REQUIRE_INTEGRATION_TESTS=false` explicitly.
 - Run `NODE_ENV=production ./scripts/billing-release-readiness-check.sh` to validate billing provider/mobile SKU configuration before submitting store builds.
 - Run `./scripts/generate-redacted-env-report.sh` to create a shareable, non-secret environment evidence snapshot for release review.
@@ -141,3 +146,21 @@ Branch protection scripts:
 
 - Run `npm run check:docs` to verify required docs exist, internal markdown links resolve, and no local-only filesystem paths have leaked into repo docs.
 - Run `./scripts/launch-doc-readiness-check.sh` only after real legal, support, store, and release values have been supplied.
+
+## CI test commands
+
+- Backend coverage gate: `npm run test:ci`
+- Backend E2E smoke: `npm run build && npm run test:e2e`
+- Synthetic uptime checks: `SYNTHETIC_BASE_URL=<url> SYNTHETIC_METRICS_TOKEN=<token> npm run check:synthetic-uptime`
+- Mobile coverage gate: `cd mobile && npm run test:ci`
+
+
+### Final verification gate knobs
+
+- `MOBILE_AUDIT_LEVEL` controls the strictness of mobile audit checks in `./scripts/final-verification-gate.sh`.
+  - `high` (default): fail on high/critical vulnerabilities.
+  - `moderate`: fail on moderate/high/critical vulnerabilities.
+  - `off`: skip mobile audit (non-release troubleshooting only).
+- `REQUIRE_HIGH_RELEASE_POLICY` defaults to `true` and blocks the gate unless `MOBILE_AUDIT_LEVEL=high`.
+  - Keep this `true` for ship/release candidates.
+  - Set to `false` only for temporary non-release diagnostics.

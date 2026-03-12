@@ -1,3 +1,5 @@
+permissions: read-all
+
 name: CI
 
 on:
@@ -28,10 +30,10 @@ jobs:
       DATABASE_URL: postgres://postgres:postgres@localhost:5432/moneta_test
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '20'
           cache: 'npm'
@@ -43,13 +45,16 @@ jobs:
         run: npm run lint
 
       - name: Unit tests
-        run: npm test
+        run: npm run test:ci
 
       - name: Database integration tests
         run: npm run test:integration
 
       - name: Build
         run: npm run build
+
+      - name: End-to-end smoke tests
+        run: npm run test:e2e
 
       - name: Security audit (high/critical)
         run: npm audit --audit-level=high
@@ -61,10 +66,10 @@ jobs:
         working-directory: mobile
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '20'
           cache: 'npm'
@@ -80,7 +85,7 @@ jobs:
         run: npm run typecheck
 
       - name: Test
-        run: npm test -- --runInBand
+        run: npm run test:ci
 
       - name: Security audit (high/critical)
         run: npm audit --audit-level=high
@@ -108,12 +113,14 @@ jobs:
       DATABASE_URL: postgres://postgres:postgres@localhost:5432/moneta_test
       REQUIRE_INTEGRATION_TESTS: 'true'
       REQUIRE_BILLING_RELEASE_CONFIG: 'false'
+      REQUIRE_HIGH_RELEASE_POLICY: 'true'
+      MOBILE_AUDIT_LEVEL: 'high'
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '20'
           cache: 'npm'

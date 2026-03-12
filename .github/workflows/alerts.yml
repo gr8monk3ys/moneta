@@ -1,3 +1,5 @@
+permissions: read-all
+
 name: Failure Alert
 
 on:
@@ -21,10 +23,5 @@ jobs:
             exit 0
           fi
 
-          payload=$(cat <<JSON
-          {
-            "text": "Moneta workflow failed: ${WORKFLOW_NAME} - ${RUN_URL}"
-          }
-JSON
-)
+          payload="{\"text\":\"Moneta workflow failed: ${WORKFLOW_NAME} - ${RUN_URL}\"}"
           curl -X POST -H 'Content-type: application/json' --data "$payload" "$ALERT_WEBHOOK_URL"

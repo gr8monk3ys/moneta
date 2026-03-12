@@ -18,7 +18,10 @@
     "check:docs": "./scripts/docs-readiness-check.sh",
     "check:billing-release": "./scripts/billing-release-readiness-check.sh",
     "check:launch-docs": "./scripts/launch-doc-readiness-check.sh",
-    "release:evidence": "./scripts/collect-release-evidence.sh"
+    "release:evidence": "./scripts/collect-release-evidence.sh",
+    "test:ci": "vitest run --coverage --exclude dist tests",
+    "test:e2e": "vitest run --config vitest.e2e.config.mjs",
+    "check:synthetic-uptime": "./scripts/synthetic-uptime-check.sh"
   },
   "keywords": [],
   "author": "",
@@ -39,7 +42,8 @@
     "zod": "^4.3.6"
   },
   "overrides": {
-    "qs": "6.14.2"
+    "qs": "6.14.2",
+    "minimatch": "10.2.4"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",
