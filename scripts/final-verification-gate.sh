@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REQUIRE_INTEGRATION_TESTS="${REQUIRE_INTEGRATION_TESTS:-true}"
 REQUIRE_BILLING_RELEASE_CONFIG="${REQUIRE_BILLING_RELEASE_CONFIG:-false}"
+REQUIRE_LAUNCH_DOCS_READY="${REQUIRE_LAUNCH_DOCS_READY:-false}"
 
 run_step() {
   local label="$1"
@@ -16,9 +17,11 @@ run_step() {
 echo "Running Moneta final verification gate from: ${ROOT_DIR}"
 echo "REQUIRE_INTEGRATION_TESTS=${REQUIRE_INTEGRATION_TESTS}"
 echo "REQUIRE_BILLING_RELEASE_CONFIG=${REQUIRE_BILLING_RELEASE_CONFIG}"
+echo "REQUIRE_LAUNCH_DOCS_READY=${REQUIRE_LAUNCH_DOCS_READY}"
 
 cd "${ROOT_DIR}"
 
+run_step "Documentation readiness" npm run check:docs
 run_step "Backend lint" npm run lint
 run_step "Backend unit tests" npm test
 
@@ -44,6 +47,14 @@ else
   echo
   echo "== Billing release readiness config =="
   echo "Skipping: set REQUIRE_BILLING_RELEASE_CONFIG=true to enforce production billing env checks."
+fi
+
+if [[ "${REQUIRE_LAUNCH_DOCS_READY}" == "true" ]]; then
+  run_step "Launch docs readiness" ./scripts/launch-doc-readiness-check.sh
+else
+  echo
+  echo "== Launch docs readiness =="
+  echo "Skipping: set REQUIRE_LAUNCH_DOCS_READY=true to enforce launch-document placeholder checks."
 fi
 
 pushd "${ROOT_DIR}/mobile" >/dev/null

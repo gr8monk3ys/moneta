@@ -1,41 +1,55 @@
-# Moneta Account and Data Deletion Policy (Draft)
+# Moneta Account and Data Deletion Policy
 
-Effective date: `<set before publication>`
+Effective date: `To be set at publication`
 
-This draft is a technical baseline and must be reviewed by legal counsel before store submission.
+This is a launch draft based on the current Moneta account model. Legal counsel should review and finalize it before publication.
 
-## 1) User-initiated deletion
+## 1. How users can request deletion
 
-Users can request account deletion in-app from profile settings. The app requires explicit confirmation before deletion.
+Users can request account deletion from Moneta profile settings. The app requires explicit confirmation before completing the deletion request.
 
-## 2) Scope of deletion
+If the in-app flow is unavailable, users should be able to contact support for help.
 
-Upon successful deletion request, Moneta deletes user account data from primary application stores, including:
+## 2. What Moneta deletes
 
-- auth account record
-- refresh tokens/sessions
-- learning progress and related activity data
-- active entitlement records associated with the user account
+When an account deletion request is successfully processed, Moneta is expected to remove user data from primary application systems, including:
 
-## 3) Data export before deletion
+- account records
+- active sessions and refresh tokens
+- learning progress and related activity records
+- entitlement records associated with the account
 
-Users can export account data in-app before deletion. Export includes key account and learning fields relevant to user access and activity.
+## 3. Export before deletion
 
-## 4) Retained records
+Moneta provides an in-app export flow so users can request a copy of key account and learning data before deletion.
 
-Moneta may retain minimal records when legally required or necessary for fraud prevention, accounting, audit, or security investigations.
+Users who want a copy of their data should export it before permanently deleting the account.
 
-## 5) Processing timeline
+## 4. Limited retention
 
-- In-app deletion request is executed immediately in application data stores.
-- Any required downstream deletions/retention handling are completed per legal obligations.
+Moneta may retain limited information where needed for:
 
-## 6) Subscription handling
+- legal compliance
+- tax or accounting obligations
+- fraud prevention
+- abuse prevention
+- security investigations
+- enforcement of platform policies
 
-Deleting a Moneta account does not automatically cancel store subscriptions. Users must cancel via Apple/Google account settings.
+Any retained information should be limited to what is reasonably necessary for those purposes.
 
-## 7) Verification and support
+## 5. Processing timing
 
-If in-app deletion is unavailable, users can contact support for manual handling.
+Moneta's current deletion flow is designed to remove primary application data promptly after a successful request.
 
-Support contact: `<support@your-domain>`
+Some downstream cleanup, backup expiry, or legally required retention handling may take additional time depending on the production environment.
+
+## 6. Subscription handling
+
+Deleting a Moneta account does not automatically cancel an App Store or Google Play subscription.
+
+Users must separately cancel subscriptions through their Apple or Google account settings to stop future renewals.
+
+## 7. Support
+
+Support contact: `<set published support contact before launch>`

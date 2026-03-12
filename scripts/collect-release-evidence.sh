@@ -13,6 +13,7 @@ Environment flags:
   RUN_BILLING_CHECK=true|false
   RUN_BRANCH_PROTECTION_CHECK=true|false
   REQUIRE_INTEGRATION_TESTS=true|false
+  REQUIRE_LAUNCH_DOCS_READY=true|false
   PROTECTED_BRANCH=main
   EVIDENCE_TIMESTAMP=<optional label>
   EVIDENCE_DIR=<optional absolute path>
@@ -29,6 +30,7 @@ RUN_BILLING_CHECK="${RUN_BILLING_CHECK:-true}"
 RUN_BRANCH_PROTECTION_CHECK="${RUN_BRANCH_PROTECTION_CHECK:-true}"
 
 REQUIRE_INTEGRATION_TESTS="${REQUIRE_INTEGRATION_TESTS:-true}"
+REQUIRE_LAUNCH_DOCS_READY="${REQUIRE_LAUNCH_DOCS_READY:-true}"
 PROTECTED_BRANCH="${PROTECTED_BRANCH:-main}"
 
 if [[ -d "${OUT_DIR}" ]]; then
@@ -80,6 +82,7 @@ fi
 if [[ "${RUN_FINAL_GATE}" == "true" ]]; then
   run_step "final_verification_gate" env -u NODE_ENV \
     REQUIRE_INTEGRATION_TESTS="${REQUIRE_INTEGRATION_TESTS}" \
+    REQUIRE_LAUNCH_DOCS_READY="${REQUIRE_LAUNCH_DOCS_READY}" \
     REQUIRE_BILLING_RELEASE_CONFIG=false \
     "${ROOT_DIR}/scripts/final-verification-gate.sh"
 fi

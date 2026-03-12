@@ -51,6 +51,7 @@
 - Follow `docs/external-go-live-execution-guide.md` for command-by-command external execution.
 
 ## Production readiness verification
+- Run `npm run check:docs` before release review to validate required docs, local markdown links, and portable repo references.
 - Run `./scripts/production-readiness-check.sh` before deployment to validate required production environment variables and reject insecure defaults.
 - This script is intended as a preflight guardrail and should be wired into your deploy pipeline.
 - Generate a redacted environment evidence artifact with `./scripts/generate-redacted-env-report.sh` for release records.

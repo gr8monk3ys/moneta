@@ -1,67 +1,88 @@
-# Moneta Privacy Policy (Draft)
+# Moneta Privacy Policy
 
-Effective date: `<set before publication>`
+Effective date: `To be set at publication`
 
-This draft is a technical baseline and must be reviewed by legal counsel before store submission.
+This is a launch draft based on the current Moneta product and codebase. Legal counsel should review and finalize it before publication.
 
-## 1) Data we collect
+## 1. Overview
 
-- Account identifiers: email, user ID
-- Authentication/session metadata needed for security
-- Learning activity and progress history
-- Subscription/entitlement records required for paid access
-- Operational telemetry (request metadata, error logs, device/app diagnostics)
+Moneta is a personal finance learning app that helps users build money confidence through short lessons, daily review, and progress tracking.
 
-## 2) Why we process data
+This Privacy Policy explains what Moneta collects, how that information is used, and what choices users have.
 
-- Provide authentication and account security
-- Deliver lessons, progress tracking, and personalized learning state
-- Process and validate paid subscriptions
-- Detect abuse, fraud, and operational incidents
-- Comply with legal obligations
+## 2. Information Moneta collects
 
-## 3) Billing data
+Moneta may collect the following categories of information:
 
-Moneta uses platform billing providers (Apple App Store and Google Play). Payment card data is handled by those providers, not by Moneta.
+- Account information, such as email address and internal user ID
+- Authentication and session data needed to keep accounts secure
+- Learning data, such as completed lessons, review activity, current level, streaks, and progress history
+- Subscription and entitlement data needed to manage paid access
+- Operational and diagnostic data, such as request metadata, app errors, and service health signals
 
-## 4) Data sharing
+Moneta does not process payment card details directly in the current mobile purchase flow. Payments are handled by Apple App Store and Google Play.
 
-- Service providers used for hosting, monitoring, and billing verification
-- Legal/regulatory disclosures when required by law
-- No sale of personal data
+## 3. How Moneta uses information
 
-## 5) Data retention
+Moneta uses collected information to:
 
-- Account and learning records retained while account is active
-- Security and operational logs retained per operational policy
-- Deleted account data follows `docs/compliance/account-data-deletion-policy.md`
+- create and secure user accounts
+- deliver lessons, reviews, and personalized learning state
+- track progress, mastery, and streaks
+- verify and manage subscription access
+- detect abuse, fraud, and service misuse
+- maintain, debug, and improve the service
+- comply with legal obligations
 
-## 6) User rights
+## 4. How information may be shared
 
-Users can request:
+Moneta may share information:
 
-- Access/export of account data
-- Account deletion and associated data deletion subject to legal requirements
-- Correction of inaccurate account information
+- with service providers that support hosting, monitoring, email delivery, or billing verification
+- when required by law, regulation, legal process, or to protect users and the service
+- in connection with a business transfer or restructuring, subject to applicable law
 
-In-app support for export/deletion is available in profile settings.
+Moneta does not sell personal data.
 
-## 7) Security controls
+The current mobile codebase does not include third-party advertising SDKs or cross-app tracking tooling. If that changes, this policy and the store disclosures should be updated before release.
 
-- Secret management and rotation policy
-- Access controls and least privilege for production systems
-- Transport encryption and secure operational practices
+## 5. Data retention
 
-## 8) Children
+Moneta retains account and learning data while an account remains active and for as long as needed to operate the service, meet legal obligations, resolve disputes, and prevent fraud or abuse.
 
-Moneta is not intended for children under the minimum age required by applicable law without parental consent where required.
+When a user requests deletion, Moneta follows the process described in `docs/compliance/account-data-deletion-policy.md`.
 
-## 9) International transfers
+## 6. User choices and rights
 
-If data crosses borders, Moneta uses appropriate safeguards required by applicable law.
+Depending on applicable law, users may have the right to:
 
-## 10) Contact
+- access or export account data
+- request deletion of account data
+- request correction of inaccurate account information
+- object to or limit certain kinds of processing where required by law
 
-Privacy contact: `<privacy@your-domain>`
+Moneta currently provides in-app account export and account deletion flows through profile settings.
 
-Controller/Operator: `<legal entity name and address>`
+## 7. Security
+
+Moneta uses reasonable technical and organizational measures to protect user information, including transport encryption, access controls, secret management, and operational monitoring.
+
+No system can be guaranteed perfectly secure, so users should also protect their credentials and notify support if they suspect unauthorized access.
+
+## 8. Children
+
+Moneta is not intended for children under the minimum age required by applicable law without any required parental or guardian consent.
+
+## 9. International transfers
+
+If Moneta processes data across borders, it will use safeguards appropriate to the jurisdictions involved and as required by applicable law.
+
+## 10. Policy changes
+
+Moneta may update this Privacy Policy from time to time. Material changes should be communicated through the app, the website, or both where required by law.
+
+## 11. Contact
+
+Privacy contact: `<set published privacy contact before launch>`
+
+Controller / operator: `<set legal entity name and address before launch>`

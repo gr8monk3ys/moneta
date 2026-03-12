@@ -22,7 +22,7 @@ This snapshot documents curriculum depth after the 2026-02-14 content expansion 
 ## Validation command
 
 ```bash
-cd /Users/natalyscaturchio/code/moneta
+cd "$(git rev-parse --show-toplevel)"
 npx tsx -e "import { listCurriculum } from './src/data.ts'; const all=listCurriculum(true); const items=all.reduce((s,l)=>s+l.items.length,0); const levelCounts=all.reduce((acc,l)=>{acc[l.level]=(acc[l.level]||0)+1; return acc;}, {} as Record<string,number>); const free=all.filter(l=>!l.premium).length; const premium=all.filter(l=>l.premium).length; console.log(JSON.stringify({lessons:all.length,items,levelCounts,free,premium}, null, 2));"
 ```
 
@@ -32,4 +32,3 @@ npx tsx -e "import { listCurriculum } from './src/data.ts'; const all=listCurric
 - Base lessons were expanded and enriched with MCQ choices and explanations to reduce free-text grading ambiguity.
 - Generated lessons were updated to avoid exact-match long-form text prompts and to ensure every generated lesson contains at least one numeric item that can be graded reliably.
 - Lesson ordering is deterministic by finance level, track, premium flag, and ordinal suffix.
-

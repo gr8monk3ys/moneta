@@ -105,4 +105,4 @@ Ship a production-ready finance learning app with:
 
 ## Final Gate
 
-Run `/Users/natalyscaturchio/code/moneta/scripts/final-verification-gate.sh` and attach results to release sign-off.
+Run `./scripts/final-verification-gate.sh` from the repo root and attach results to release sign-off.

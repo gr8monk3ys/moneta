@@ -99,7 +99,7 @@ Preview builds require HTTPS:
 2. Build with:
 
 ```bash
-cd /Users/natalyscaturchio/code/moneta/mobile
+cd "$(git rev-parse --show-toplevel)/mobile"
 npx eas-cli build --profile preview --platform ios
 npx eas-cli build --profile preview --platform android
 ```

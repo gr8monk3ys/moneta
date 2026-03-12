@@ -11,7 +11,7 @@ Enforce PR-based delivery and block direct pushes to `main`.
 ### Commands
 
 ```bash
-cd /Users/natalyscaturchio/code/moneta
+cd "$(git rev-parse --show-toplevel)"
 ./scripts/configure-branch-protection.sh main
 ./scripts/verify-branch-protection.sh main
 ```
@@ -42,7 +42,7 @@ Validate production secret/config safety before deployment.
 ### Commands
 
 ```bash
-cd /Users/natalyscaturchio/code/moneta
+cd "$(git rev-parse --show-toplevel)"
 NODE_ENV=production ./scripts/production-readiness-check.sh
 NODE_ENV=production REQUIRE_MOBILE_BILLING_VARS=true ./scripts/billing-release-readiness-check.sh
 ./scripts/generate-redacted-env-report.sh > /tmp/moneta-redacted-env-report.md
@@ -63,7 +63,7 @@ Collect all verifications and logs into a single timestamped directory.
 ### Commands
 
 ```bash
-cd /Users/natalyscaturchio/code/moneta
+cd "$(git rev-parse --show-toplevel)"
 RUN_FINAL_GATE=true \
 RUN_PRODUCTION_CHECK=true \
 RUN_BILLING_CHECK=true \
@@ -146,13 +146,20 @@ Publish legal documents and wire URLs into store metadata.
 - `docs/compliance/subscription-terms.md`
 - `docs/compliance/financial-education-disclaimer.md`
 - `docs/compliance/account-data-deletion-policy.md`
+- `docs/store-submission/app-store-connect-metadata-template.md`
+- `docs/store-submission/google-play-listing-template.md`
+- `docs/store-submission/store-assets-checklist.md`
 
 ### Required finalization
 
 1. Legal review and edits.
-2. Publish final docs on production website.
-3. Add final URLs to App Store and Play Console listings.
-4. Archive approval notes in release evidence.
+2. Fill `docs/launch-missing-values-checklist.md`.
+3. Run `./scripts/launch-doc-readiness-check.sh` and resolve all findings.
+4. Finalize App Store and Play listing copy plus screenshot captions.
+5. Produce final release screenshots/assets from a release-style build.
+6. Publish final docs on production website.
+7. Add final URLs to App Store and Play Console listings.
+8. Archive approval notes in release evidence.
 
 ## Final go/no-go gate
 

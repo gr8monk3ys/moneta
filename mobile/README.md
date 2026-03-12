@@ -28,6 +28,8 @@ Set `EXPO_PUBLIC_API_BASE_URL` to your backend URL.
 - Local simulator (same machine): `http://localhost:3000`
 - Physical iPhone device: use your machine LAN IP, for example `http://192.168.1.15:3000`
 
+For Expo web preview, browser requests must also be allowed by the backend `CORS_ORIGINS` setting.
+
 ## EAS builds (required for IAP testing)
 
 In-app purchases do not work in Expo Go. Use EAS to build a dev client or an internal distribution build.
@@ -69,5 +71,14 @@ Optional local fallback:
 
 ```bash
 npm run lint
+npm run typecheck
 npm run test
+npm run test:coverage -- --runInBand
 ```
+
+## Production env templates
+
+Use the tracked templates when preparing release values:
+
+- `../.env.production.example`
+- `.env.production.example`

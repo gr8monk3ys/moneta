@@ -1,36 +1,47 @@
-# Moneta Financial Education Disclaimer (Draft)
+# Moneta Financial Education Disclaimer
 
-Effective date: `<set before publication>`
+Effective date: `To be set at publication`
 
-This draft is a technical baseline and must be reviewed by legal counsel before store submission.
+This is a launch draft based on the current Moneta product. Legal counsel should review and finalize it before publication.
 
-## Educational content only
+## 1. Educational content only
 
-Moneta provides educational and informational content about personal finance topics. Content is intended to help users learn concepts and build better decision-making habits.
+Moneta provides educational and informational content about personal finance topics. The service is designed to help users learn concepts, practice reasoning, and build better financial habits over time.
 
-## Not financial advice
+## 2. Not personalized advice
 
-Moneta does not provide financial, investment, legal, tax, or accounting advice. Content is generalized and may not apply to your circumstances.
+Moneta does not provide personalized financial, investment, legal, tax, or accounting advice.
 
-You should consider consulting qualified professionals (for example, a CFP professional, CPA, attorney, or licensed adviser) before making decisions that affect your finances.
+Content is generalized, educational in nature, and may not fit a user's specific circumstances, goals, risk tolerance, location, or legal obligations.
 
-## No guarantees
+## 3. No professional relationship
 
-Moneta does not guarantee outcomes, returns, savings, or financial improvement. Financial decisions carry risk, and outcomes depend on many factors outside Moneta’s control.
+Using Moneta does not create a fiduciary, advisory, brokerage, legal, tax, or agency relationship between the user and Moneta.
 
-## No fiduciary relationship
+## 4. Examples and scenarios
 
-Your use of Moneta does not create a fiduciary relationship. Moneta is not acting as your agent, broker, or adviser.
+Moneta may use simplified examples, hypothetical scenarios, sample calculations, or educational comparisons to explain concepts.
 
-## Third-party information
+Those examples are intended to teach principles, not to recommend a specific product, investment, transaction, or course of action.
 
-If Moneta references third-party resources (for example government or educational websites), those resources are provided for convenience and may change. Moneta is not responsible for third-party content.
+## 5. No guarantees
 
-## Paid subscriptions
+Moneta does not guarantee financial outcomes, returns, savings, debt reduction, credit improvement, or any other result.
 
-Subscriptions unlock in-app features but do not change the educational nature of the service.
+Financial decisions involve risk and depend on many factors outside Moneta's control.
 
-## Contact
+## 6. When to seek professional help
 
-Support contact: `<support@your-domain>`
+Users should consider consulting qualified professionals before making decisions with meaningful financial, legal, tax, insurance, or investment consequences.
 
+## 7. Third-party resources
+
+If Moneta links to third-party educational or public-information resources, those links are provided for convenience. Moneta is not responsible for third-party content, policies, or changes.
+
+## 8. Paid subscriptions
+
+Paid subscriptions unlock app features only. They do not change the educational-only nature of the service.
+
+## 9. Contact
+
+Support contact: `<set published support contact before launch>`

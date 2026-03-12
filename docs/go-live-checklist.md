@@ -28,6 +28,19 @@ Execution companion:
 - [ ] Decide the intended software license for the repository (open-source vs proprietary).
 - [ ] Ensure the declared license matches everywhere it is published (for example `/LICENSE` vs `/package.json`).
 - [ ] Validate any third-party attribution/notice requirements for dependencies and bundled assets.
+- [ ] Complete legal review of:
+  - `docs/compliance/privacy-policy.md`
+  - `docs/compliance/terms-of-service.md`
+  - `docs/compliance/subscription-terms.md`
+  - `docs/compliance/financial-education-disclaimer.md`
+  - `docs/compliance/account-data-deletion-policy.md`
+- [ ] Confirm the legal entity name, address, and support/privacy contact emails that will appear in user-facing policies.
+- [ ] Fill `docs/launch-inputs-handoff-template.md` and route it to legal / ops / release owners.
+- [ ] Fill `docs/launch-missing-values-checklist.md` with final launch values.
+- [ ] Populate the tracked env templates with final release values:
+  - `.env.production.example`
+  - `mobile/.env.production.example`
+- [ ] Run `./scripts/launch-doc-readiness-check.sh` and resolve all unresolved placeholders in compliance/store docs.
 
 ### Runtime configuration
 - [ ] Set all required production environment variables:
@@ -76,10 +89,19 @@ Execution companion:
   - Subscription terms (`docs/compliance/subscription-terms.md`)
   - Financial education disclaimer (`docs/compliance/financial-education-disclaimer.md`)
   - Account deletion policy (`docs/compliance/account-data-deletion-policy.md`)
+- [ ] Finalize App Store / Play listing copy and reviewer notes using:
+  - `docs/store-submission/app-store-connect-metadata-template.md`
+  - `docs/store-submission/google-play-listing-template.md`
+  - `docs/store-submission/store-assets-checklist.md`
+- [ ] Produce final store screenshots that show real release content and no dev-only or sandbox text.
 - [ ] Verify secure auth persistence and logout flows on cold app restart.
 - [ ] Verify in-app account export/deletion flows meet App Store and Play policy requirements.
 - [ ] Complete store billing lifecycle validation using `docs/store-billing-qa-matrix-template.md`.
 - [ ] Run manual smoke QA checklist: `docs/qa/mobile-manual-qa-checklist.md`
+- [ ] Run a final finance SME spot-check on higher-risk content areas before public launch:
+  - tax basics
+  - insurance basics
+  - retirement / investing lessons
 
 ## P1 — Should complete in first post-launch sprint
 
@@ -100,7 +122,7 @@ Execution companion:
 - [ ] Document maintenance windows and incident escalation path.
 
 ### Product quality
-- [ ] Replace placeholder/static mobile screens with backend-driven data where intended.
+- [ ] Remove or hard-hide any dev-only actions, debug affordances, or sandbox-only copy from release builds.
 - [ ] Add analytics instrumentation for onboarding funnel and daily learning loop.
 - [ ] Validate app behavior under poor network conditions and intermittent connectivity.
 
