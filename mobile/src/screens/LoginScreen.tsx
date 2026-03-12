@@ -64,20 +64,47 @@ export function LoginScreen(props: { onAuthenticated: (auth: AuthResult) => void
   return (
     <View style={styles.container}>
       <Text style={styles.logo}>💰 Moneta</Text>
-      <Text style={styles.title}>Duolingo for Finance</Text>
-      <Text style={styles.subtitle}>5 minutes today. Better money decisions tomorrow.</Text>
+      <Text style={styles.title}>Build money confidence in 5-minute lessons</Text>
+      <Text style={styles.subtitle}>Start free and learn the habits behind better day-to-day financial decisions.</Text>
 
-      <TextInput style={styles.input} autoCapitalize="none" value={email} onChangeText={setEmail} placeholder="Email" placeholderTextColor={theme.textMuted} />
-      <TextInput style={styles.input} secureTextEntry value={password} onChangeText={setPassword} placeholder="Password" placeholderTextColor={theme.textMuted} />
+      <Text style={styles.label}>Email</Text>
+      <TextInput
+        style={styles.input}
+        accessibilityLabel="Email"
+        autoCapitalize="none"
+        autoComplete="email"
+        autoCorrect={false}
+        keyboardType="email-address"
+        spellCheck={false}
+        textContentType="emailAddress"
+        value={email}
+        onChangeText={setEmail}
+        placeholder="you@example.com…"
+        placeholderTextColor={theme.textMuted}
+      />
+      <Text style={styles.label}>Password</Text>
+      <TextInput
+        style={styles.input}
+        accessibilityLabel="Password"
+        autoCapitalize="none"
+        autoComplete="password"
+        autoCorrect={false}
+        secureTextEntry
+        textContentType="password"
+        value={password}
+        onChangeText={setPassword}
+        placeholder="Enter your password…"
+        placeholderTextColor={theme.textMuted}
+      />
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
       <Pressable style={styles.primaryButton} onPress={signIn} disabled={loading}>
-        <Text style={styles.primaryText}>{loading ? 'Loading…' : 'Start Learning'}</Text>
+        <Text style={styles.primaryText}>{loading ? 'Loading…' : 'Sign In'}</Text>
       </Pressable>
 
       <Pressable style={styles.secondaryButton} onPress={createAccount} disabled={loading}>
-        <Text style={styles.secondaryText}>Create Account</Text>
+        <Text style={styles.secondaryText}>Create Free Account</Text>
       </Pressable>
 
       {props.onForgotPassword ? (
@@ -105,6 +132,7 @@ const styles = StyleSheet.create({
   logo: { color: theme.accent, fontSize: 28, fontWeight: '700' },
   title: { color: theme.textPrimary, fontSize: 24, fontWeight: '700' },
   subtitle: { color: theme.textMuted, marginBottom: 12 },
+  label: { color: theme.textPrimary, fontWeight: '600' },
   input: {
     backgroundColor: theme.card,
     borderRadius: 12,

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useReducer } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { confirmPasswordReset } from '../lib/api';
@@ -13,25 +13,42 @@ function formatError(error: unknown): string {
 
 export function PasswordResetConfirmScreen(props: Props) {
   const initialEmail = props.route.params?.email ?? '';
-  const [email, setEmail] = useState(initialEmail);
-  const [code, setCode] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [status, setStatus] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [state, setState] = useReducer((
+    previous: {
+      email: string;
+      code: string;
+      newPassword: string;
+      status: string | null;
+      error: string | null;
+      loading: boolean;
+    },
+    patch: Partial<{
+      email: string;
+      code: string;
+      newPassword: string;
+      status: string | null;
+      error: string | null;
+      loading: boolean;
+    }>
+  ) => ({ ...previous, ...patch }), {
+    email: initialEmail,
+    code: '',
+    newPassword: '',
+    status: null,
+    error: null,
+    loading: false
+  });
 
   async function resetPassword() {
-    setLoading(true);
-    setError(null);
-    setStatus(null);
+    setState({ loading: true, error: null, status: null });
 
     try {
-      await confirmPasswordReset({ email, code, newPassword });
-      setStatus('Password updated. You can sign in now.');
+      await confirmPasswordReset({ email: state.email, code: state.code, newPassword: state.newPassword });
+      setState({ status: 'Password updated. You can sign in now.' });
     } catch (reason) {
-      setError(formatError(reason));
+      setState({ error: formatError(reason) });
     } finally {
-      setLoading(false);
+      setState({ loading: false });
     }
   }
 
@@ -44,41 +61,60 @@ export function PasswordResetConfirmScreen(props: Props) {
       <Text style={styles.title}>Enter Reset Code</Text>
       <Text style={styles.subtitle}>Paste the 8-digit code from your email and choose a new password.</Text>
 
+      <Text style={styles.label}>Email</Text>
       <TextInput
         style={styles.input}
         autoCapitalize="none"
-        value={email}
-        onChangeText={setEmail}
+        accessibilityLabel="Email"
+        autoComplete="email"
+        autoCorrect={false}
+        keyboardType="email-address"
+        spellCheck={false}
+        textContentType="emailAddress"
+        value={state.email}
+        onChangeText={(email) => setState({ email })}
         placeholder="Email"
         placeholderTextColor={theme.textMuted}
       />
 
+      <Text style={styles.label}>8-digit code</Text>
       <TextInput
         style={styles.input}
+        accessibilityLabel="8-digit code"
+        autoComplete="one-time-code"
+        autoCorrect={false}
         keyboardType="number-pad"
-        value={code}
-        onChangeText={setCode}
+        maxLength={8}
+        textContentType="oneTimeCode"
+        value={state.code}
+        onChangeText={(code) => setState({ code })}
         placeholder="8-digit code"
         placeholderTextColor={theme.textMuted}
       />
 
+      <Text style={styles.label}>New password</Text>
       <TextInput
         style={styles.input}
+        accessibilityLabel="New password"
+        autoCapitalize="none"
+        autoComplete="new-password"
+        autoCorrect={false}
         secureTextEntry
-        value={newPassword}
-        onChangeText={setNewPassword}
+        textContentType="newPassword"
+        value={state.newPassword}
+        onChangeText={(newPassword) => setState({ newPassword })}
         placeholder="New password"
         placeholderTextColor={theme.textMuted}
       />
 
-      {error ? <Text style={styles.error}>{error}</Text> : null}
-      {status ? <Text style={styles.status}>{status}</Text> : null}
+      {state.error ? <Text style={styles.error}>{state.error}</Text> : null}
+      {state.status ? <Text style={styles.status}>{state.status}</Text> : null}
 
-      <Pressable style={styles.primaryButton} onPress={resetPassword} disabled={loading}>
-        <Text style={styles.primaryText}>{loading ? 'Updating…' : 'Reset Password'}</Text>
+      <Pressable style={styles.primaryButton} onPress={resetPassword} disabled={state.loading}>
+        <Text style={styles.primaryText}>{state.loading ? 'Updating…' : 'Reset Password'}</Text>
       </Pressable>
 
-      <Pressable style={styles.secondaryButton} onPress={() => props.navigation.popToTop()} disabled={loading}>
+      <Pressable style={styles.secondaryButton} onPress={() => props.navigation.popToTop()} disabled={state.loading}>
         <Text style={styles.secondaryText}>Back to Sign In</Text>
       </Pressable>
     </View>
@@ -90,6 +126,7 @@ const styles = StyleSheet.create({
   backLink: { color: theme.textMuted, textDecorationLine: 'underline', marginBottom: 8 },
   title: { color: theme.textPrimary, fontSize: 24, fontWeight: '700' },
   subtitle: { color: theme.textMuted, marginBottom: 12 },
+  label: { color: theme.textPrimary, fontWeight: '600' },
   input: {
     backgroundColor: theme.card,
     borderRadius: 12,
@@ -105,4 +142,3 @@ const styles = StyleSheet.create({
   secondaryButton: { borderRadius: 12, padding: 14, borderWidth: 1, borderColor: '#2f3440' },
   secondaryText: { textAlign: 'center', color: theme.textPrimary, fontWeight: '700' }
 });
-

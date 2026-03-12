@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { completeSession, fetchLessonDetails, fetchProgress, fetchToday, refresh, submitPlacement, type AuthContext } from '../lib/api';
+import { getLevelMeta } from '../lib/learningMetadata';
 import { queryKeys } from '../lib/queryKeys';
 import { theme } from '../lib/theme';
 
@@ -16,6 +17,19 @@ interface HomeProps {
 
 function formatError(error: unknown): string {
   return error instanceof Error ? error.message : 'Unknown error';
+}
+
+function formatSkillId(skillId: string): string {
+  return skillId
+    .split(/[-_]/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+function getReviewPreview(review: { prompt?: string; skillId: string }): string {
+  const prompt = review.prompt?.trim();
+  return prompt && prompt.length > 0 ? prompt : formatSkillId(review.skillId);
 }
 
 export function HomeScreen(props: HomeProps) {
@@ -35,6 +49,7 @@ export function HomeScreen(props: HomeProps) {
 
   const progress = progressQuery.data;
   const today = todayQuery.data;
+  const levelMeta = getLevelMeta(progress?.currentLevel ?? 'F1');
 
   const nextLessonId = today?.nextLesson?.lessonId;
   const dueReviews = today?.dueReviews ?? [];
@@ -88,7 +103,7 @@ export function HomeScreen(props: HomeProps) {
 
     try {
       const placement = await submitPlacement(props.auth, { correctAnswers: 7, totalQuestions: 10 });
-      setStatus(`Placed at ${placement.level}`);
+      setStatus(`Placed in ${getLevelMeta(placement.level).title}`);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.progress(props.userId) }),
         queryClient.invalidateQueries({ queryKey: queryKeys.today(props.userId) }),
@@ -189,23 +204,35 @@ export function HomeScreen(props: HomeProps) {
         <Text style={styles.planBadge}>Plan: {planBadge}</Text>
         <Text style={styles.heroSubtitle}>
           {progress
-            ? `Level ${progress.currentLevel} • ${progress.masteredSkills}/${progress.totalSkills} mastered`
+            ? progress.totalSkills > 0
+              ? `${levelMeta.title} • ${progress.masteredSkills} of ${progress.totalSkills} concepts mastered`
+              : `${levelMeta.title} • Start your first lesson to unlock progress tracking.`
             : 'Loading progress…'}
         </Text>
         <Text style={styles.heroSubtitle}>
-          Next: {today?.nextLesson?.title ?? (today ? 'No lesson available' : 'Loading lesson…')}
+          {today?.nextLesson
+            ? `Next ${today.nextLesson.estimatedMinutes} min lesson: ${today.nextLesson.title}`
+            : (today ? 'No lesson available right now.' : 'Loading lesson…')}
         </Text>
       </View>
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Today’s Reviews</Text>
         {dueReviews.length > 0 ? (
-          dueReviews.map((review) => <Text key={review.itemId} style={styles.cardLine}>• {review.skillId}</Text>)
+          dueReviews.map((review) => (
+            <Text key={review.itemId} style={styles.cardLine} numberOfLines={2}>
+              • {getReviewPreview(review)}
+            </Text>
+          ))
         ) : practiceReviews.length > 0 ? (
           <>
             <Text style={styles.cardLine}>No reviews due yet.</Text>
             <Text style={styles.cardLine}>Practice set available:</Text>
-            {practiceReviews.map((review) => <Text key={review.itemId} style={styles.cardLine}>• {review.skillId}</Text>)}
+            {practiceReviews.map((review) => (
+              <Text key={review.itemId} style={styles.cardLine} numberOfLines={2}>
+                • {getReviewPreview(review)}
+              </Text>
+            ))}
           </>
         ) : (
           <Text style={styles.cardLine}>Complete a lesson to generate reviews.</Text>
@@ -222,11 +249,11 @@ export function HomeScreen(props: HomeProps) {
         <Pressable
           style={styles.button}
           onPress={handleStartReviews}
-          disabled={loading || (dueReviews.length === 0 && practiceReviews.length === 0)}
+          disabled={loading}
         >
           <Text style={styles.buttonText}>Start Reviews</Text>
         </Pressable>
-        <Pressable style={styles.button} onPress={handleStartNextLesson} disabled={loading || !nextLessonId}>
+        <Pressable style={styles.button} onPress={handleStartNextLesson} disabled={loading}>
           <Text style={styles.buttonText}>Start Next Lesson</Text>
         </Pressable>
         {isDev ? (
@@ -263,7 +290,7 @@ const styles = StyleSheet.create({
   heroSubtitle: { color: theme.textMuted },
   card: { backgroundColor: theme.card, borderRadius: 16, padding: 16, gap: 6 },
   cardTitle: { color: theme.textPrimary, fontWeight: '700' },
-  cardLine: { color: theme.textMuted },
+  cardLine: { color: theme.textMuted, lineHeight: 20 },
   limitNote: { color: theme.accent, fontSize: 12, marginTop: 6 },
   streak: { color: theme.success, fontWeight: '700', fontSize: 18 },
   actions: { gap: 10 },

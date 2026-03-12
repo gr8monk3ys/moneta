@@ -169,6 +169,13 @@ function ReviewPlayerRoute(props: ReviewPlayerRouteProps) {
   );
 }
 
+// Exposed for focused navigator tests so query invalidation branches can be verified without full-stack navigation setup.
+export const __testables = {
+  toAuthContext,
+  LessonPlayerRoute,
+  ReviewPlayerRoute
+} as const;
+
 export function AppNavigator() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>

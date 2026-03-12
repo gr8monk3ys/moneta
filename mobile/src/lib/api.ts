@@ -202,15 +202,28 @@ async function parseError(response: Response): Promise<never> {
   throw new Error(body.error ?? 'Request failed');
 }
 
+function normalizeRequestError(error: unknown): Error {
+  if (error instanceof Error && /Failed to fetch|Network request failed|Load failed/i.test(error.message)) {
+    return new Error("Couldn't reach Moneta. Check your connection and app configuration.");
+  }
+
+  return error instanceof Error ? error : new Error('Request failed');
+}
+
 async function postJson<T>(path: string, payload: unknown, token?: string): Promise<T> {
-  const response = await fetch(`${baseUrl}${path}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {})
-    },
-    body: JSON.stringify(payload)
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${baseUrl}${path}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      },
+      body: JSON.stringify(payload)
+    });
+  } catch (error) {
+    throw normalizeRequestError(error);
+  }
 
   if (!response.ok) {
     return parseError(response);
@@ -220,14 +233,19 @@ async function postJson<T>(path: string, payload: unknown, token?: string): Prom
 }
 
 async function deleteJson<T>(path: string, payload: unknown, token?: string): Promise<T> {
-  const response = await fetch(`${baseUrl}${path}`, {
-    method: 'DELETE',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {})
-    },
-    body: JSON.stringify(payload)
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${baseUrl}${path}`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      },
+      body: JSON.stringify(payload)
+    });
+  } catch (error) {
+    throw normalizeRequestError(error);
+  }
 
   if (!response.ok) {
     return parseError(response);
@@ -237,9 +255,14 @@ async function deleteJson<T>(path: string, payload: unknown, token?: string): Pr
 }
 
 async function getJson<T>(path: string, token?: string): Promise<T> {
-  const response = await fetch(`${baseUrl}${path}`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : undefined
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${baseUrl}${path}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined
+    });
+  } catch (error) {
+    throw normalizeRequestError(error);
+  }
 
   if (!response.ok) {
     return parseError(response);

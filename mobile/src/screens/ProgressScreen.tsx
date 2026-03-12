@@ -1,6 +1,7 @@
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { fetchProgress, type AuthContext } from '../lib/api';
+import { getLevelMeta } from '../lib/learningMetadata';
 import { queryKeys } from '../lib/queryKeys';
 import { theme } from '../lib/theme';
 
@@ -44,11 +45,13 @@ export function ProgressScreen(props: ProgressScreenProps) {
   }
 
   const progress = progressQuery.data;
+  const levelMeta = getLevelMeta(progress.currentLevel);
   const masteryValue = progress.totalSkills === 0 ? 0 : Math.round((progress.masteredSkills / progress.totalSkills) * 100);
+  const hasStarted = progress.totalSkills > 0;
   const viewModel: ProgressViewModel = {
-    level: progress.currentLevel,
-    skills: `${progress.masteredSkills}/${progress.totalSkills}`,
-    mastery: `${masteryValue}%`,
+    level: levelMeta.title,
+    skills: hasStarted ? `${progress.masteredSkills}/${progress.totalSkills}` : 'Ready',
+    mastery: hasStarted ? `${masteryValue}%` : 'Start',
     streak: `${progress.streakDays}`,
     plan: progress.plan === 'pro' && progress.premiumActive ? 'Pro' : 'Free'
   };
@@ -58,10 +61,12 @@ export function ProgressScreen(props: ProgressScreenProps) {
       <View style={styles.ringCard}>
         <Text style={styles.level}>{viewModel.level}</Text>
         <Text style={styles.plan}>Plan: {viewModel.plan}</Text>
-        <Text style={styles.subtitle}>Everyday Decision-Making</Text>
+        <Text style={styles.subtitle}>
+          {hasStarted ? levelMeta.description : 'Complete your first lesson to unlock progress stats.'}
+        </Text>
       </View>
       <View style={styles.statsRow}>
-        <View style={styles.stat}><Text style={styles.statValue}>{viewModel.skills}</Text><Text style={styles.statLabel}>Skills</Text></View>
+        <View style={styles.stat}><Text style={styles.statValue}>{viewModel.skills}</Text><Text style={styles.statLabel}>{hasStarted ? 'Concepts' : 'First Lesson'}</Text></View>
         <View style={styles.stat}><Text style={styles.statValue}>{viewModel.mastery}</Text><Text style={styles.statLabel}>Mastery</Text></View>
         <View style={styles.stat}><Text style={styles.statValue}>{viewModel.streak}</Text><Text style={styles.statLabel}>Streak</Text></View>
       </View>

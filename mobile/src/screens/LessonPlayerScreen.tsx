@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useReducer } from 'react';
 import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { completeSession, fetchLessonDetails, type AuthContext, type LessonDetailsResponse, type SessionItemResult } from '../lib/api';
 import { theme } from '../lib/theme';
@@ -26,26 +26,49 @@ function resolveFormat(item: LessonItem): NonNullable<LessonItem['format']> {
 }
 
 export function LessonPlayerScreen(props: LessonPlayerProps) {
-  const [lesson, setLesson] = useState<Lesson | null>(null);
-  const [answers, setAnswers] = useState<Record<string, string>>({});
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [submitted, setSubmitted] = useState<Awaited<ReturnType<typeof completeSession>> | null>(null);
+  const [state, setState] = useReducer((
+    previous: {
+      lesson: Lesson | null;
+      answers: Record<string, string>;
+      currentIndex: number;
+      loading: boolean;
+      submitting: boolean;
+      error: string | null;
+      submitted: Awaited<ReturnType<typeof completeSession>> | null;
+    },
+    patch: Partial<{
+      lesson: Lesson | null;
+      answers: Record<string, string>;
+      currentIndex: number;
+      loading: boolean;
+      submitting: boolean;
+      error: string | null;
+      submitted: Awaited<ReturnType<typeof completeSession>> | null;
+    }>
+  ) => ({ ...previous, ...patch }), {
+    lesson: null,
+    answers: {},
+    currentIndex: 0,
+    loading: true,
+    submitting: false,
+    error: null,
+    submitted: null
+  });
 
   const loadLesson = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+    setState({ loading: true, error: null });
     try {
       const details = await fetchLessonDetails(props.lessonId, props.auth);
-      setLesson(details.lesson);
-      setAnswers({});
-      setCurrentIndex(0);
+      setState({
+        lesson: details.lesson,
+        answers: {},
+        currentIndex: 0,
+        submitted: null
+      });
     } catch (reason) {
-      setError(formatError(reason));
+      setState({ error: formatError(reason) });
     } finally {
-      setLoading(false);
+      setState({ loading: false });
     }
   }, [props.auth, props.lessonId]);
 
@@ -53,56 +76,55 @@ export function LessonPlayerScreen(props: LessonPlayerProps) {
     loadLesson().catch(() => undefined);
   }, [loadLesson]);
 
-  const items = lesson?.items ?? [];
-  const item = items[currentIndex];
-  const answeredCount = items.filter((entry) => Boolean(answers[entry.itemId]?.trim())).length;
+  const items = state.lesson?.items ?? [];
+  const item = items[state.currentIndex];
+  const answeredCount = items.filter((entry) => Boolean(state.answers[entry.itemId]?.trim())).length;
 
   const gradedByItemId = useMemo(() => {
-    const graded = submitted?.gradedItems ?? [];
+    const graded = state.submitted?.gradedItems ?? [];
     return new Map(graded.filter((entry) => entry.itemId).map((entry) => [String(entry.itemId), entry] as const));
-  }, [submitted]);
+  }, [state.submitted]);
 
-  const completedLabel = submitted?.lessonProgress?.completed ? 'Lesson completed' : 'Lesson submitted';
+  const completedLabel = state.submitted?.lessonProgress?.completed ? 'Lesson completed' : 'Lesson submitted';
 
   function setAnswer(itemId: string, value: string) {
-    setAnswers((prev) => ({ ...prev, [itemId]: value }));
+    setState({ answers: { ...state.answers, [itemId]: value } });
   }
 
   async function handleSubmit() {
-    if (!lesson) {
+    if (!state.lesson) {
       return;
     }
 
-    const missing = lesson.items.find((entry) => !answers[entry.itemId]?.trim());
+    const missing = state.lesson.items.find((entry) => !state.answers[entry.itemId]?.trim());
     if (missing) {
-      setError('Answer all questions before submitting.');
+      setState({ error: 'Answer all questions before submitting.' });
       return;
     }
 
-    setSubmitting(true);
-    setError(null);
+    setState({ submitting: true, error: null });
 
     try {
-      const itemResults: SessionItemResult[] = lesson.items.map((entry) => ({
+      const itemResults: SessionItemResult[] = state.lesson.items.map((entry) => ({
         itemId: entry.itemId,
         skillId: entry.skillId,
-        answer: String(answers[entry.itemId] ?? '')
+        answer: String(state.answers[entry.itemId] ?? '')
       }));
 
       const response = await completeSession(props.auth, itemResults, {
-        lessonId: lesson.lessonId,
+        lessonId: state.lesson.lessonId,
         timeZone: getTimeZone()
       });
 
-      setSubmitted(response);
+      setState({ submitted: response });
     } catch (reason) {
-      setError(formatError(reason));
+      setState({ error: formatError(reason) });
     } finally {
-      setSubmitting(false);
+      setState({ submitting: false });
     }
   }
 
-  if (loading) {
+  if (state.loading) {
     return (
       <View style={styles.center}>
         <ActivityIndicator color={theme.accent} />
@@ -110,10 +132,10 @@ export function LessonPlayerScreen(props: LessonPlayerProps) {
     );
   }
 
-  if (error && !lesson) {
+  if (state.error && !state.lesson) {
     return (
       <View style={styles.container}>
-        <Text style={styles.error}>{error}</Text>
+        <Text style={styles.error}>{state.error}</Text>
         <Pressable style={styles.secondaryButton} onPress={() => props.onExit(false)}>
           <Text style={styles.secondaryButtonText}>Back</Text>
         </Pressable>
@@ -121,7 +143,7 @@ export function LessonPlayerScreen(props: LessonPlayerProps) {
     );
   }
 
-  if (!lesson) {
+  if (!state.lesson) {
     return (
       <View style={styles.center}>
         <Text style={styles.error}>Unable to load lesson.</Text>
@@ -132,7 +154,7 @@ export function LessonPlayerScreen(props: LessonPlayerProps) {
     );
   }
 
-  if (submitted) {
+  if (state.submitted) {
     return (
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
         <View style={styles.headerRow}>
@@ -143,26 +165,26 @@ export function LessonPlayerScreen(props: LessonPlayerProps) {
 
         <View style={styles.hero}>
           <Text style={styles.heroTitle}>{completedLabel}</Text>
-          <Text style={styles.heroSubtitle}>{lesson.title}</Text>
-          {submitted.lessonProgress ? (
+          <Text style={styles.heroSubtitle}>{state.lesson.title}</Text>
+          {state.submitted.lessonProgress ? (
             <Text style={styles.heroSubtitle}>
-              Score {Math.round(submitted.lessonProgress.score * 100)}% • {submitted.lessonProgress.correctCount}/{submitted.lessonProgress.totalItems} correct • coverage {Math.round(submitted.lessonProgress.coverage * 100)}%
+              Score {Math.round(state.submitted.lessonProgress.score * 100)}% • {state.submitted.lessonProgress.correctCount}/{state.submitted.lessonProgress.totalItems} correct • coverage {Math.round(state.submitted.lessonProgress.coverage * 100)}%
             </Text>
           ) : null}
         </View>
 
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+        {state.error ? <Text style={styles.error}>{state.error}</Text> : null}
 
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Review</Text>
-          {lesson.items.map((entry, index) => {
+          {state.lesson.items.map((entry, index) => {
             const graded = gradedByItemId.get(entry.itemId);
             const isCorrect = graded?.isCorrect;
-            const prefix = typeof isCorrect === 'boolean' ? (isCorrect ? '[OK]' : '[X]') : '-';
+            const prefix = typeof isCorrect === 'boolean' ? (isCorrect ? 'Correct' : 'Review') : 'Answer';
             return (
               <View key={entry.itemId} style={styles.reviewItem}>
                 <Text style={styles.reviewPrompt}>{prefix} {index + 1}. {entry.prompt}</Text>
-                <Text style={styles.reviewAnswer}>Your answer: {answers[entry.itemId]}</Text>
+                <Text style={styles.reviewAnswer}>Your answer: {state.answers[entry.itemId]}</Text>
                 {entry.explanation ? <Text style={styles.reviewExplanation}>{entry.explanation}</Text> : null}
               </View>
             );
@@ -184,25 +206,25 @@ export function LessonPlayerScreen(props: LessonPlayerProps) {
   }
 
   const format = resolveFormat(item);
-  const currentAnswer = answers[item.itemId] ?? '';
+  const currentAnswer = state.answers[item.itemId] ?? '';
   const canGoNext = Boolean(currentAnswer.trim());
-  const isLast = currentIndex >= items.length - 1;
+  const isLast = state.currentIndex >= items.length - 1;
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <View style={styles.headerRow}>
-        <Pressable style={styles.secondaryButton} onPress={() => props.onExit(false)} disabled={submitting}>
+        <Pressable style={styles.secondaryButton} onPress={() => props.onExit(false)} disabled={state.submitting}>
           <Text style={styles.secondaryButtonText}>Back</Text>
         </Pressable>
-        <Text style={styles.progress}>{currentIndex + 1}/{items.length} • answered {answeredCount}</Text>
+        <Text style={styles.progress}>{state.currentIndex + 1}/{items.length} • answered {answeredCount}</Text>
       </View>
 
       <View style={styles.hero}>
-        <Text style={styles.heroTitle}>{lesson.title}</Text>
-        <Text style={styles.heroSubtitle}>{lesson.summary}</Text>
+        <Text style={styles.heroTitle}>{state.lesson.title}</Text>
+        <Text style={styles.heroSubtitle}>{state.lesson.summary}</Text>
       </View>
 
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {state.error ? <Text style={styles.error}>{state.error}</Text> : null}
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Question</Text>
@@ -217,7 +239,7 @@ export function LessonPlayerScreen(props: LessonPlayerProps) {
                   key={choice}
                   style={[styles.choice, selected && styles.choiceSelected]}
                   onPress={() => setAnswer(item.itemId, choice)}
-                  disabled={submitting}
+                  disabled={state.submitting}
                 >
                   <Text style={[styles.choiceText, selected && styles.choiceTextSelected]}>{choice}</Text>
                 </Pressable>
@@ -234,42 +256,36 @@ export function LessonPlayerScreen(props: LessonPlayerProps) {
             multiline={format === 'scenario'}
             numberOfLines={format === 'scenario' ? 4 : 1}
             keyboardType={format === 'numeric' ? (Platform.OS === 'ios' ? 'numbers-and-punctuation' : 'numeric') : 'default'}
-            editable={!submitting}
+            editable={!state.submitting}
           />
         )}
 
-        {currentAnswer.trim() && item.explanation ? (
-          <View style={styles.explanation}>
-            <Text style={styles.explanationTitle}>Why it matters</Text>
-            <Text style={styles.explanationBody}>{item.explanation}</Text>
-          </View>
-        ) : null}
       </View>
 
       <View style={styles.navRow}>
         <Pressable
-          style={[styles.secondaryButton, currentIndex === 0 && styles.disabledButton]}
-          onPress={() => setCurrentIndex((prev) => Math.max(0, prev - 1))}
-          disabled={submitting || currentIndex === 0}
+          style={[styles.secondaryButton, state.currentIndex === 0 && styles.disabledButton]}
+          onPress={() => setState({ currentIndex: Math.max(0, state.currentIndex - 1) })}
+          disabled={state.submitting || state.currentIndex === 0}
         >
           <Text style={styles.secondaryButtonText}>Previous</Text>
         </Pressable>
 
         {!isLast ? (
           <Pressable
-            style={[styles.button, (!canGoNext || submitting) && styles.disabledButton]}
-            onPress={() => setCurrentIndex((prev) => Math.min(items.length - 1, prev + 1))}
-            disabled={!canGoNext || submitting}
+            style={[styles.button, (!canGoNext || state.submitting) && styles.disabledButton]}
+            onPress={() => setState({ currentIndex: Math.min(items.length - 1, state.currentIndex + 1) })}
+            disabled={!canGoNext || state.submitting}
           >
             <Text style={styles.buttonText}>Next</Text>
           </Pressable>
         ) : (
           <Pressable
-            style={[styles.button, (submitting || answeredCount !== items.length) && styles.disabledButton]}
+            style={[styles.button, state.submitting && styles.disabledButton]}
             onPress={handleSubmit}
-            disabled={submitting || answeredCount !== items.length}
+            disabled={state.submitting}
           >
-            <Text style={styles.buttonText}>{submitting ? 'Submitting…' : 'Submit Lesson'}</Text>
+            <Text style={styles.buttonText}>{state.submitting ? 'Submitting…' : 'Submit Lesson'}</Text>
           </Pressable>
         )}
       </View>

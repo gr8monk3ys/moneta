@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useReducer } from 'react';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   deleteAccount as deleteAccountApi,
@@ -27,13 +27,32 @@ function formatError(error: unknown): string {
   return error instanceof Error ? error.message : 'Unknown error';
 }
 
+type MessageTone = 'neutral' | 'success' | 'error';
+
 export function ProfileScreen(props: ProfileProps) {
   const queryClient = useQueryClient();
-  const [message, setMessage] = useState<string | null>(null);
-  const [restoring, setRestoring] = useState(false);
-  const [exporting, setExporting] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [deleteArmed, setDeleteArmed] = useState(false);
+  const [state, setState] = useReducer((
+    previous: {
+      message: { text: string; tone: MessageTone } | null;
+      restoring: boolean;
+      exporting: boolean;
+      deleting: boolean;
+      showDeleteModal: boolean;
+    },
+    patch: Partial<{
+      message: { text: string; tone: MessageTone } | null;
+      restoring: boolean;
+      exporting: boolean;
+      deleting: boolean;
+      showDeleteModal: boolean;
+    }>
+  ) => ({ ...previous, ...patch }), {
+    message: null,
+    restoring: false,
+    exporting: false,
+    deleting: false,
+    showDeleteModal: false
+  });
 
   useEffect(() => {
     return () => {
@@ -48,37 +67,42 @@ export function ProfileScreen(props: ProfileProps) {
 
   const entitlement: Entitlement | null = entitlementQuery.data?.entitlement ?? null;
   const loadingEntitlement = entitlementQuery.isPending;
-  const visibleMessage = message ?? (entitlementQuery.error ? formatError(entitlementQuery.error) : null);
+  const visibleMessage = state.message ?? (entitlementQuery.error
+    ? { text: formatError(entitlementQuery.error), tone: 'error' as const }
+    : null);
+  const memberIdSuffix = props.userId.slice(-8);
+
+  function showMessage(text: string, tone: MessageTone) {
+    setState({ message: { text, tone } });
+  }
 
   async function signOutCurrentSession() {
     try {
-      setDeleteArmed(false);
+      setState({ showDeleteModal: false });
       await logout(props.auth.refreshToken);
       props.onLogout();
     } catch (error) {
-      setMessage(formatError(error));
+      showMessage(formatError(error), 'error');
     }
   }
 
   async function signOutEverywhere() {
     try {
-      setDeleteArmed(false);
+      setState({ showDeleteModal: false });
       await logoutAll(props.auth);
       props.onLogout();
     } catch (error) {
-      setMessage(formatError(error));
+      showMessage(formatError(error), 'error');
     }
   }
 
   async function restorePurchase() {
     try {
-      setRestoring(true);
-      setMessage(null);
-      setDeleteArmed(false);
+      setState({ restoring: true, message: null, showDeleteModal: false });
 
       const restoredPurchase = await restoreLatestSubscription();
       if (!restoredPurchase) {
-        setMessage('No active subscription was found to restore.');
+        showMessage('No active subscription was found to restore.', 'neutral');
         return;
       }
 
@@ -90,77 +114,66 @@ export function ProfileScreen(props: ProfileProps) {
 
       queryClient.setQueryData(queryKeys.entitlement(props.userId), response);
       if (response.entitlement.plan === 'pro') {
-        setMessage(restoredPurchase.sandbox ? 'Pro access restored (sandbox).' : 'Pro access restored.');
+        showMessage(restoredPurchase.sandbox ? 'Pro access restored (sandbox).' : 'Pro access restored.', 'success');
       } else {
-        setMessage('Subscription restored, but no active Pro entitlement was found.');
+        showMessage('Subscription restored, but no active Pro entitlement was found.', 'neutral');
       }
     } catch (error) {
-      setMessage(formatError(error));
+      showMessage(formatError(error), 'error');
     } finally {
-      setRestoring(false);
+      setState({ restoring: false });
     }
   }
 
   async function handleOpenLegal(doc: LegalDocKey) {
     try {
-      setMessage(null);
+      setState({ message: null });
       const result = await openLegalDoc(doc);
       if (!result.opened) {
-        setMessage(result.error ?? 'Unable to open legal document.');
+        showMessage(result.error ?? 'Unable to open legal document.', 'error');
       }
     } catch (error) {
-      setMessage(formatError(error));
+      showMessage(formatError(error), 'error');
     }
   }
 
   async function exportAccountSnapshot() {
     try {
-      setExporting(true);
-      setMessage(null);
-      setDeleteArmed(false);
+      setState({ exporting: true, message: null, showDeleteModal: false });
 
       const snapshot = await exportAccountData(props.auth);
-      setMessage(
-        `Export ready: ${snapshot.sessions.total} sessions, ${snapshot.billing.webhookEventsProcessed} billing events.`
-      );
+      showMessage(`Export ready: ${snapshot.sessions.total} sessions, ${snapshot.billing.webhookEventsProcessed} billing events.`, 'success');
     } catch (error) {
-      setMessage(formatError(error));
+      showMessage(formatError(error), 'error');
     } finally {
-      setExporting(false);
+      setState({ exporting: false });
     }
   }
 
-  async function deleteAccount() {
-    if (!deleteArmed) {
-      setDeleteArmed(true);
-      setMessage('Tap "Delete Account" again to confirm permanent deletion.');
-      return;
-    }
-
+  async function confirmDeleteAccount() {
     try {
-      setDeleting(true);
-      setMessage(null);
+      setState({ deleting: true, message: null });
       await deleteAccountApi(props.auth);
-      setMessage('Account deleted.');
+      setState({ showDeleteModal: false });
       props.onLogout();
     } catch (error) {
-      setMessage(formatError(error));
+      showMessage(formatError(error), 'error');
     } finally {
-      setDeleting(false);
-      setDeleteArmed(false);
+      setState({ deleting: false });
     }
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.name}>👤 {props.userId}</Text>
-      <Text style={styles.description}>Your account is connected to live backend endpoints.</Text>
+    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <Text style={styles.name}>Your Account</Text>
+      <Text style={styles.description}>Manage your plan, privacy links, and account data export.</Text>
+      <Text style={styles.memberId}>Member ID ending in {memberIdSuffix}</Text>
       <Text style={styles.plan}>
         Plan: {loadingEntitlement ? 'Loading…' : entitlement?.plan === 'pro' ? 'Pro' : 'Free'}
       </Text>
       {!loadingEntitlement && entitlement?.plan !== 'pro' ? (
-        <Pressable style={styles.button} onPress={restorePurchase} disabled={restoring}>
-          <Text style={styles.buttonText}>{restoring ? 'Restoring…' : 'Restore Pro Access'}</Text>
+        <Pressable style={styles.button} onPress={restorePurchase} disabled={state.restoring}>
+          <Text style={styles.buttonText}>{state.restoring ? 'Restoring…' : 'Restore Subscription'}</Text>
         </Pressable>
       ) : null}
 
@@ -192,23 +205,61 @@ export function ProfileScreen(props: ProfileProps) {
         <Text style={styles.secondaryText}>Sign out all devices</Text>
       </Pressable>
 
-      <Pressable style={styles.secondaryButton} onPress={exportAccountSnapshot} disabled={exporting}>
-        <Text style={styles.secondaryText}>{exporting ? 'Exporting…' : 'Export Account Data'}</Text>
+      <Pressable style={styles.secondaryButton} onPress={exportAccountSnapshot} disabled={state.exporting}>
+        <Text style={styles.secondaryText}>{state.exporting ? 'Exporting…' : 'Export Account Data'}</Text>
       </Pressable>
 
-      <Pressable style={styles.dangerButton} onPress={deleteAccount} disabled={deleting}>
-        <Text style={styles.dangerText}>{deleting ? 'Deleting…' : 'Delete Account'}</Text>
+      <Pressable style={styles.dangerButton} onPress={() => setState({ showDeleteModal: true })} disabled={state.deleting}>
+        <Text style={styles.dangerText}>Delete Account</Text>
       </Pressable>
 
-      {visibleMessage ? <Text style={styles.message}>{visibleMessage}</Text> : null}
-    </View>
+      {visibleMessage ? (
+        <Text
+          style={[
+            styles.message,
+            visibleMessage.tone === 'success' ? styles.successMessage : null,
+            visibleMessage.tone === 'error' ? styles.errorMessage : null
+          ]}
+        >
+          {visibleMessage.text}
+        </Text>
+      ) : null}
+
+      <Modal
+        transparent
+        animationType="fade"
+        visible={state.showDeleteModal}
+        onRequestClose={() => {
+          if (!state.deleting) {
+            setState({ showDeleteModal: false });
+          }
+        }}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Delete account?</Text>
+            <Text style={styles.modalBody}>This permanently removes your progress, billing history, and active sessions.</Text>
+            <View style={styles.modalActions}>
+              <Pressable style={styles.paywallSecondaryButton} onPress={() => setState({ showDeleteModal: false })} disabled={state.deleting}>
+                <Text style={styles.paywallSecondaryText}>Cancel</Text>
+              </Pressable>
+              <Pressable style={styles.modalDangerButton} onPress={confirmDeleteAccount} disabled={state.deleting}>
+                <Text style={styles.modalDangerText}>{state.deleting ? 'Deleting…' : 'Confirm Deletion'}</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: theme.bg, padding: 16, gap: 12 },
+  container: { flex: 1, backgroundColor: theme.bg },
+  content: { padding: 16, paddingBottom: 32, gap: 12 },
   name: { color: theme.textPrimary, fontSize: 20, fontWeight: '700' },
   description: { color: theme.textMuted },
+  memberId: { color: theme.textMuted, fontSize: 12 },
   plan: { color: theme.accent, fontWeight: '600' },
   section: { gap: 10, paddingTop: 6 },
   sectionTitle: { color: theme.textPrimary, fontWeight: '700' },
@@ -218,6 +269,17 @@ const styles = StyleSheet.create({
   secondaryText: { color: theme.accent, textAlign: 'center', fontWeight: '700' },
   dangerButton: { borderColor: theme.danger, borderWidth: 1, borderRadius: 12, padding: 12 },
   dangerText: { color: theme.danger, textAlign: 'center', fontWeight: '700' },
-  message: { color: theme.danger },
-  disclaimer: { color: theme.textMuted, textAlign: 'center', fontSize: 12 }
+  message: { textAlign: 'center' },
+  successMessage: { color: theme.success },
+  errorMessage: { color: theme.danger },
+  disclaimer: { color: theme.textMuted, textAlign: 'center', fontSize: 12 },
+  modalBackdrop: { flex: 1, backgroundColor: 'rgba(7, 9, 13, 0.7)', alignItems: 'center', justifyContent: 'center', padding: 20 },
+  modalCard: { width: '100%', maxWidth: 420, backgroundColor: theme.card, borderRadius: 18, padding: 18, gap: 12, borderWidth: 1, borderColor: '#2f3440' },
+  modalTitle: { color: theme.textPrimary, fontSize: 18, fontWeight: '700' },
+  modalBody: { color: theme.textMuted, lineHeight: 20 },
+  modalActions: { gap: 10 },
+  modalDangerButton: { backgroundColor: theme.danger, borderRadius: 12, padding: 12 },
+  modalDangerText: { color: '#1a1d24', textAlign: 'center', fontWeight: '700' },
+  paywallSecondaryButton: { borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#2f3440' },
+  paywallSecondaryText: { color: theme.textPrimary, textAlign: 'center', fontWeight: '700' }
 });

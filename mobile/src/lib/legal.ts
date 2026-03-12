@@ -19,7 +19,8 @@ function readUrl(key: LegalDocKey): string | undefined {
       return env?.EXPO_PUBLIC_FINANCIAL_DISCLAIMER_URL;
     default: {
       const exhaustive: never = key;
-      return exhaustive;
+      void exhaustive;
+      return undefined;
     }
   }
 }
@@ -52,4 +53,3 @@ export async function openLegalDoc(key: LegalDocKey): Promise<{ opened: boolean;
   await Linking.openURL(url);
   return { opened: true };
 }
-

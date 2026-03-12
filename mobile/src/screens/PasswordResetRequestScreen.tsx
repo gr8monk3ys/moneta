@@ -41,11 +41,18 @@ export function PasswordResetRequestScreen(props: Props) {
       </Pressable>
 
       <Text style={styles.title}>Reset Password</Text>
-      <Text style={styles.subtitle}>We’ll email you an 8-digit code.</Text>
+      <Text style={styles.subtitle}>We’ll email you an 8-digit code so you can create a new password.</Text>
 
+      <Text style={styles.label}>Email</Text>
       <TextInput
         style={styles.input}
+        accessibilityLabel="Email"
         autoCapitalize="none"
+        autoComplete="email"
+        autoCorrect={false}
+        keyboardType="email-address"
+        spellCheck={false}
+        textContentType="emailAddress"
         value={email}
         onChangeText={setEmail}
         placeholder="Email"
@@ -67,6 +74,7 @@ const styles = StyleSheet.create({
   backLink: { color: theme.textMuted, textDecorationLine: 'underline', marginBottom: 8 },
   title: { color: theme.textPrimary, fontSize: 24, fontWeight: '700' },
   subtitle: { color: theme.textMuted, marginBottom: 12 },
+  label: { color: theme.textPrimary, fontWeight: '600' },
   input: {
     backgroundColor: theme.card,
     borderRadius: 12,
@@ -80,4 +88,3 @@ const styles = StyleSheet.create({
   primaryButton: { backgroundColor: theme.accent, borderRadius: 12, padding: 14, marginTop: 8 },
   primaryText: { textAlign: 'center', color: '#1a1d24', fontWeight: '700' }
 });
-

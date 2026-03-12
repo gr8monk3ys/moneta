@@ -1,22 +1,35 @@
 import {
   completeSession,
+  confirmPasswordReset,
   deleteAccount,
   exportAccountData,
   fetchEntitlement,
+  fetchLearningPath,
+  fetchLessonDetails,
   fetchProgress,
   fetchToday,
+  login,
   logout,
   logoutAll,
   probeBackend,
+  refresh,
   register,
+  requestPasswordReset,
   syncEntitlement,
   submitPlacement,
   type AuthContext
 } from '../src/lib/api';
 
 describe('mobile api auth retry', () => {
+  const originalEnv = process.env.EXPO_PUBLIC_API_BASE_URL;
+  const devGlobal = global as typeof globalThis & { __DEV__?: boolean };
+  const originalDev = devGlobal.__DEV__;
+
   afterEach(() => {
     jest.restoreAllMocks();
+    jest.resetModules();
+    process.env.EXPO_PUBLIC_API_BASE_URL = originalEnv;
+    devGlobal.__DEV__ = originalDev;
   });
 
   it('refreshes once for concurrent auth failures and retries with new token', async () => {
@@ -246,5 +259,164 @@ describe('mobile api auth retry', () => {
     await expect(fetchToday('user-1', auth)).rejects.toThrow('Service unavailable');
 
     expect(fetchSpy).toHaveBeenCalled();
+  });
+
+  it('normalizes network request failures into a user-facing message', async () => {
+    jest.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Failed to fetch'));
+
+    await expect(register({ email: 'x@example.com', password: 'password123' })).rejects.toThrow(
+      "Couldn't reach Moneta. Check your connection and app configuration."
+    );
+  });
+
+  it('normalizes delete request network failures into a user-facing message', async () => {
+    const auth: AuthContext = {
+      accessToken: 'access-token',
+      refreshToken: 'refresh-token',
+      onTokensUpdated: jest.fn()
+    };
+
+    jest.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Failed to fetch'));
+
+    await expect(deleteAccount(auth)).rejects.toThrow(
+      "Couldn't reach Moneta. Check your connection and app configuration."
+    );
+  });
+
+  it('covers direct auth endpoints plus learning path and lesson detail fetches', async () => {
+    const fetchSpy = jest.spyOn(globalThis, 'fetch').mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+
+      if (url.endsWith('/api/auth/login')) {
+        return {
+          ok: true,
+          json: async () => ({ accessToken: 'a', refreshToken: 'r', userId: 'user-1', sessionId: 's1' })
+        } as Response;
+      }
+      if (url.endsWith('/api/auth/password/reset/request')) {
+        return { ok: true, json: async () => ({ success: true }) } as Response;
+      }
+      if (url.endsWith('/api/auth/password/reset/confirm')) {
+        return { ok: true, json: async () => ({ success: true }) } as Response;
+      }
+      if (url.endsWith('/api/auth/refresh')) {
+        return {
+          ok: true,
+          json: async () => ({ accessToken: 'fresh-a', refreshToken: 'fresh-r', sessionId: 's2' })
+        } as Response;
+      }
+      if (url.endsWith('/api/learn/path/user-1')) {
+        expect((init?.headers as Record<string, string>).Authorization).toBe('Bearer access-token');
+        return {
+          ok: true,
+          json: async () => ({
+            userId: 'user-1',
+            entitlement: {
+              plan: 'free',
+              isActive: true,
+              source: 'none',
+              updatedAt: new Date().toISOString()
+            },
+            features: {
+              advancedTracks: false,
+              certificates: false,
+              streakRepair: false,
+              unlimitedReviews: false,
+              maxDueReviews: 3
+            },
+            lessons: [
+              {
+                lessonId: 'lesson-1',
+                title: 'Cash Flow Basics',
+                summary: 'Short intro',
+                level: 'F1',
+                track: 'core',
+                premium: false,
+                estimatedMinutes: 5,
+                locked: false,
+                completed: false
+              }
+            ]
+          })
+        } as Response;
+      }
+      if (url.endsWith('/api/learn/lessons/lesson-1')) {
+        expect((init?.headers as Record<string, string>).Authorization).toBe('Bearer access-token');
+        return {
+          ok: true,
+          json: async () => ({
+            userId: 'user-1',
+            lesson: {
+              lessonId: 'lesson-1',
+              title: 'Cash Flow Basics',
+              summary: 'Short intro',
+              level: 'F1',
+              track: 'core',
+              premium: false,
+              estimatedMinutes: 5,
+              items: [
+                {
+                  itemId: 'item-1',
+                  skillId: 'cash-flow',
+                  prompt: 'What is cash flow?'
+                }
+              ]
+            }
+          })
+        } as Response;
+      }
+
+      throw new Error(`Unhandled request: ${url}`);
+    });
+
+    const auth: AuthContext = {
+      accessToken: 'access-token',
+      refreshToken: 'refresh-token',
+      onTokensUpdated: jest.fn()
+    };
+
+    const loginResponse = await login({ email: 'u1@example.com', password: 'password123' });
+    expect(loginResponse.userId).toBe('user-1');
+    await expect(requestPasswordReset({ email: 'u1@example.com' })).resolves.toEqual({ success: true });
+    await expect(confirmPasswordReset({ email: 'u1@example.com', code: '123456', newPassword: 'next-password' })).resolves.toEqual({ success: true });
+    await expect(refresh('refresh-token')).resolves.toMatchObject({ accessToken: 'fresh-a', refreshToken: 'fresh-r' });
+
+    const path = await fetchLearningPath('user-1', auth);
+    expect(path.lessons[0]?.lessonId).toBe('lesson-1');
+
+    const lesson = await fetchLessonDetails('lesson-1', auth);
+    expect(lesson.lesson.items[0]?.itemId).toBe('item-1');
+
+    expect(fetchSpy).toHaveBeenCalled();
+  });
+
+  it('falls back to generic request errors when responses or thrown values are malformed', async () => {
+    const auth: AuthContext = {
+      accessToken: 'access-token',
+      refreshToken: 'refresh-token',
+      onTokensUpdated: jest.fn()
+    };
+
+    jest.spyOn(globalThis, 'fetch')
+      .mockRejectedValueOnce('offline')
+      .mockImplementationOnce(async () => ({
+        ok: false,
+        json: async () => {
+          throw new Error('invalid json');
+        }
+      } as unknown as Response))
+      .mockRejectedValueOnce('load failure');
+
+    await expect(login({ email: 'u1@example.com', password: 'password123' })).rejects.toThrow('Request failed');
+    await expect(deleteAccount(auth)).rejects.toThrow('Request failed');
+    await expect(fetchLessonDetails('lesson-1', auth)).rejects.toThrow('Request failed');
+  });
+
+  it('requires an API base URL outside development builds', () => {
+    jest.resetModules();
+    devGlobal.__DEV__ = false;
+    delete process.env.EXPO_PUBLIC_API_BASE_URL;
+
+    expect(() => require('../src/lib/api')).toThrow('EXPO_PUBLIC_API_BASE_URL is required for non-dev builds.');
   });
 });

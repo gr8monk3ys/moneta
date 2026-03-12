@@ -120,12 +120,12 @@ describe('mobile presentational components', () => {
 
     await waitFor(() => {
       expect(learn.getByText('Up next: Next Up')).toBeTruthy();
-      expect(learn.getByText('1. Money Basics')).toBeTruthy();
+      expect(learn.getByText('Money Basics')).toBeTruthy();
     });
 
     const progress = renderWithQueryClient(<ProgressScreen userId="u1" auth={auth} />);
     await waitFor(() => {
-      expect(progress.getByText('Everyday Decision-Making')).toBeTruthy();
+      expect(progress.getByText('Everyday Decisions')).toBeTruthy();
       expect(progress.getByText('2/4')).toBeTruthy();
       expect(progress.getByText('50%')).toBeTruthy();
       expect(progress.getByText('7')).toBeTruthy();

@@ -1,21 +1,11 @@
-import {
-  endConnection,
-  fetchProducts,
-  finishTransaction,
-  getAvailablePurchases,
-  getReceiptIOS,
-  initConnection,
-  requestPurchase,
-  restorePurchases,
-  type ProductSubscription,
-  type Purchase
-} from 'expo-iap';
+import type { ProductSubscription, Purchase } from 'expo-iap';
 import { Platform } from 'react-native';
 
 const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env;
 const DEFAULT_PRO_PRODUCT_ID = 'moneta.pro.monthly';
 
 let connected = false;
+let expoIapModulePromise: Promise<typeof import('expo-iap')> | null = null;
 
 export type BillingPlatform = 'ios' | 'android';
 
@@ -75,6 +65,16 @@ function sandboxEnabled(): boolean {
   return env?.NODE_ENV !== 'production';
 }
 
+async function loadExpoIap() {
+  if (!expoIapModulePromise) {
+    expoIapModulePromise = env?.JEST_WORKER_ID
+      ? Promise.resolve().then(() => require('expo-iap') as typeof import('expo-iap'))
+      : import('expo-iap');
+  }
+
+  return expoIapModulePromise;
+}
+
 function createSandboxPayload(platform: BillingPlatform, productId: string): BillingSyncPayload {
   return {
     platform,
@@ -98,7 +98,8 @@ async function ensureConnection(): Promise<void> {
     return;
   }
 
-  await initConnection();
+  const expoIap = await loadExpoIap();
+  await expoIap.initConnection();
   connected = true;
 }
 
@@ -126,7 +127,8 @@ function selectPurchase(purchases: Purchase[], productIds: string[]): Purchase |
 }
 
 async function resolveAndroidSubscriptionOffers(productId: string): Promise<Array<{ sku: string; offerToken: string }> | undefined> {
-  const raw = await fetchProducts({ skus: [productId], type: 'subs' });
+  const expoIap = await loadExpoIap();
+  const raw = await expoIap.fetchProducts({ skus: [productId], type: 'subs' });
   const products = raw as ProductSubscription[];
   const product = products.find((entry) => entry.id === productId);
   const offerToken = product?.subscriptionOffers?.[0]?.offerTokenAndroid;
@@ -139,7 +141,8 @@ async function resolveAndroidSubscriptionOffers(productId: string): Promise<Arra
 }
 
 async function resolveIosReceiptOrThrow(): Promise<string> {
-  const receipt = await getReceiptIOS();
+  const expoIap = await loadExpoIap();
+  const receipt = await expoIap.getReceiptIOS();
   if (!receipt) {
     throw new Error('Could not load App Store receipt for verification.');
   }
@@ -181,7 +184,8 @@ export async function listSubscriptionProducts(): Promise<BillingCatalogProduct[
   }
 
   await ensureConnection();
-  const raw = await fetchProducts({ skus, type: 'subs' });
+  const expoIap = await loadExpoIap();
+  const raw = await expoIap.fetchProducts({ skus, type: 'subs' });
   const products = raw as ProductSubscription[];
   const byId = new Map(products.map((product) => [product.id, toCatalogProduct(product)] as const));
 
@@ -204,9 +208,10 @@ export async function purchasePrimarySubscription(userId: string): Promise<Billi
   }
 
   await ensureConnection();
+  const expoIap = await loadExpoIap();
 
   if (platform === 'ios') {
-    const purchase = await requestPurchase({
+    const purchase = await expoIap.requestPurchase({
       type: 'subs',
       request: {
         apple: {
@@ -220,7 +225,7 @@ export async function purchasePrimarySubscription(userId: string): Promise<Billi
       throw new Error('Purchase was not completed by the App Store.');
     }
 
-    await finishTransaction({ purchase: selected, isConsumable: false });
+    await expoIap.finishTransaction({ purchase: selected, isConsumable: false });
     const receipt = await resolveIosReceiptOrThrow();
     return {
       platform: 'ios',
@@ -231,7 +236,7 @@ export async function purchasePrimarySubscription(userId: string): Promise<Billi
   }
 
   const subscriptionOffers = await resolveAndroidSubscriptionOffers(primarySku);
-  const purchase = await requestPurchase({
+  const purchase = await expoIap.requestPurchase({
     type: 'subs',
     request: {
       google: {
@@ -249,7 +254,7 @@ export async function purchasePrimarySubscription(userId: string): Promise<Billi
     throw new Error('Purchase token was not returned by Google Play.');
   }
 
-  await finishTransaction({ purchase: selected, isConsumable: false });
+  await expoIap.finishTransaction({ purchase: selected, isConsumable: false });
 
   return {
     platform: 'android',
@@ -273,10 +278,11 @@ export async function restoreLatestSubscription(): Promise<BillingSyncPayload | 
   }
 
   await ensureConnection();
-  await restorePurchases();
+  const expoIap = await loadExpoIap();
+  await expoIap.restorePurchases();
 
   if (platform === 'ios') {
-    const receipt = await getReceiptIOS();
+    const receipt = await expoIap.getReceiptIOS();
     if (!receipt) {
       return null;
     }
@@ -289,7 +295,7 @@ export async function restoreLatestSubscription(): Promise<BillingSyncPayload | 
     };
   }
 
-  const purchases = await getAvailablePurchases({ includeSuspendedAndroid: false });
+  const purchases = await expoIap.getAvailablePurchases({ includeSuspendedAndroid: false });
   const selected = selectPurchase(purchases, skus);
   const token = selected?.purchaseToken?.trim();
 
@@ -310,6 +316,7 @@ export async function disconnectStoreBilling(): Promise<void> {
     return;
   }
 
-  await endConnection();
+  const expoIap = await loadExpoIap();
+  await expoIap.endConnection();
   connected = false;
 }
