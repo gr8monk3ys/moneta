@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { authenticateJwt, type AuthenticatedRequest } from '../auth.js';
 import { normalizeEntitlement, resolveFeatureAccess } from '../billing.js';
 import { getKnownSkillIds, getLessonById, getNextLessonForLevel, getNextLessonForProgress, isLessonCompleted, listCurriculum } from '../data.js';
-import { applyItemResult, isValidTimeZone, markSessionActivity, placeUser } from '../engine.js';
+import { applyItemResult, higherLevel, isValidTimeZone, markSessionActivity, placeUser } from '../engine.js';
 import { ApiError } from '../errors.js';
 import type { ReviewItem, UserProfile } from '../types.js';
 import type { RouteDeps } from './types.js';
@@ -568,7 +568,8 @@ export function registerLearningRoutes(app: express.Express, deps: RouteDeps): v
 
       const userId = String(req.auth?.sub ?? '');
       const user = await findUserOrThrow(deps, userId);
-      user.currentLevel = placeUser(parsed.data.correctAnswers, parsed.data.totalQuestions);
+      // Placement may be re-run; never let a low score demote a user who has progressed.
+      user.currentLevel = higherLevel(user.currentLevel, placeUser(parsed.data.correctAnswers, parsed.data.totalQuestions));
       await deps.repository.upsertUserProfile(user);
       res.status(200).json({ userId, level: user.currentLevel });
     }).catch(next);

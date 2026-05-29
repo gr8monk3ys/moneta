@@ -66,6 +66,13 @@ export function placeUser(correctAnswers: number, total: number): FinanceLevel {
   return calculatePlacementLevel(correctAnswers, total);
 }
 
+const LEVEL_ORDER: FinanceLevel[] = ['F1', 'F2', 'F3', 'F4', 'F5', 'F6'];
+
+/** Return the higher of two finance levels. Used so re-running placement never demotes a user. */
+export function higherLevel(a: FinanceLevel, b: FinanceLevel): FinanceLevel {
+  return LEVEL_ORDER.indexOf(b) > LEVEL_ORDER.indexOf(a) ? b : a;
+}
+
 export function applyItemResult(profile: UserProfile, skillId: string, isCorrect: boolean): ReviewItem {
   const now = new Date();
   const skill = profile.skills[skillId] ?? { skillId, mastery: 0.2 };

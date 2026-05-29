@@ -327,6 +327,31 @@ describe('Moneta API auth + learning flow', () => {
     expect(sessionBad.status).toBe(400);
   });
 
+  it('does not demote a user when placement is re-run with a lower score', async () => {
+    const { app, accessToken, userId } = await buildAuthedApp();
+
+    const high = await request(app)
+      .post('/api/onboarding/placement')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ correctAnswers: 10, totalQuestions: 10 });
+    expect(high.status).toBe(200);
+    const placedLevel = high.body.level as string;
+    expect(placedLevel).toBe('F6');
+
+    // Re-running placement with a poor score must not downgrade the established level.
+    const low = await request(app)
+      .post('/api/onboarding/placement')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ correctAnswers: 0, totalQuestions: 10 });
+    expect(low.status).toBe(200);
+    expect(low.body.level).toBe('F6');
+
+    const progress = await request(app)
+      .get(`/api/progress/${userId}`)
+      .set('Authorization', `Bearer ${accessToken}`);
+    expect(progress.body.currentLevel).toBe('F6');
+  });
+
   it('supports learn/progress/session happy path', async () => {
     const { app, accessToken, userId } = await buildAuthedApp();
 
@@ -1381,6 +1406,12 @@ describe('Moneta API auth + learning flow', () => {
 
     const unauthorized = await request(app).get('/metrics');
     expect(unauthorized.status).toBe(401);
+
+    // Wrong token of a different length must also be rejected (constant-time compare path).
+    const wrongLength = await request(app)
+      .get('/metrics')
+      .set('Authorization', 'Bearer metrics-token-but-longer');
+    expect(wrongLength.status).toBe(401);
 
     const authorized = await request(app)
       .get('/metrics')
