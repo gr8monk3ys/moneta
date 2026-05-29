@@ -141,8 +141,19 @@ async function confirmPasswordResetHandler(req: Request, res: Response, deps: Ro
   }
 
   const normalizedEmail = parsed.data.email.toLowerCase();
+
+  // Per-account throttle: bound reset-code guessing across IPs without leaking
+  // whether the account exists (keyed by email, generic responses throughout).
+  const throttleKey = `reset:${normalizedEmail}`;
+  const lock = deps.accountThrottle.check(throttleKey);
+  if (lock.locked) {
+    res.setHeader('Retry-After', String(lock.retryAfterSeconds));
+    throw new ApiError(429, 'Too many failed attempts. Please try again later.');
+  }
+
   const user = await deps.repository.getAuthUserByEmail(normalizedEmail);
   if (!user) {
+    deps.accountThrottle.recordFailure(throttleKey);
     throw new ApiError(401, 'Invalid or expired password reset code');
   }
 
@@ -156,9 +167,11 @@ async function confirmPasswordResetHandler(req: Request, res: Response, deps: Ro
   });
 
   if (!consumed) {
+    deps.accountThrottle.recordFailure(throttleKey);
     throw new ApiError(401, 'Invalid or expired password reset code');
   }
 
+  deps.accountThrottle.reset(throttleKey);
   const passwordHash = await hashPassword(parsed.data.newPassword);
   await deps.repository.updateAuthUserPassword(user.userId, passwordHash);
   await deps.repository.revokeRefreshTokensByUser(user.userId);
@@ -174,11 +187,23 @@ async function loginHandler(req: Request, res: Response, deps: RouteDeps): Promi
 
   const { email, password, sessionId } = parsed.data;
   const normalizedEmail = email.toLowerCase();
+
+  // Per-account throttle: bound credential-stuffing attempts even across many IPs.
+  // Keyed regardless of whether the account exists, so it does not leak existence.
+  const throttleKey = `login:${normalizedEmail}`;
+  const lock = deps.accountThrottle.check(throttleKey);
+  if (lock.locked) {
+    res.setHeader('Retry-After', String(lock.retryAfterSeconds));
+    throw new ApiError(429, 'Too many failed attempts. Please try again later.');
+  }
+
   const user = await deps.repository.getAuthUserByEmail(normalizedEmail);
   if (!user || !(await comparePassword(password, user.passwordHash))) {
+    deps.accountThrottle.recordFailure(throttleKey);
     throw new ApiError(401, 'Invalid credentials');
   }
 
+  deps.accountThrottle.reset(throttleKey);
   await deps.repository.pruneExpiredRefreshTokens(new Date().toISOString());
   const tokens = await issueTokenPair(deps, user.userId, user.email, sessionId ?? createSessionId());
 
