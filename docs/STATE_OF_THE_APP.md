@@ -19,6 +19,9 @@ A structured, honest assessment of the codebase as it stands today: what it is, 
 
 **One-line verdict:** the engineering is genuinely competent for a pre-launch product; the historical risk was *judgment about where effort went* (heavy launch/CI/process apparatus over an unshipped app that had exploitable auth/billing holes). Those holes are now closed. The next gains are product-facing, not process.
 
+> **Updates since this analysis (2026-05-29):** two of the liabilities below have been resolved.
+> `data.ts` was split into `curriculum.seed.ts` / `curriculum.generator.ts` / `curriculum.ts` behind a facade (#26), and the **entire curriculum (all 84 lessons, F1–F6) is now hand-authored** to seed quality — the formulaic generated content was retired (#30–#35). The remaining content item is finance-SME sign-off of the advanced/premium F4–F6 tier (still `provisional`).
+
 ---
 
 ## 2. Architecture
@@ -117,9 +120,9 @@ This is a real strength — the test suite is good enough to refactor against wi
 
 ## 9. Key liabilities (ranked)
 
-1. **`data.ts` (2,192 lines)** — hand-authored lessons + a procedural content generator + query functions + live in-memory seed state in one module. It's the single biggest maintainability risk and obscures content review. Split into `curriculum.data.json` + `generator.ts` + `queries.ts`.
-2. **Content depth/validation** — the curriculum is largely templated/generated; for a *finance-education* product the actual lesson quality and correctness is the product, and it needs editorial validation independent of the code.
-3. **Mobile dependency CVEs** — ~15 *moderate* advisories gated behind an overdue **Expo 54 → 56** upgrade.
+1. ~~**`data.ts` (2,192 lines)**~~ — **RESOLVED (#26).** Split into `curriculum.seed.ts` + `curriculum.generator.ts` + `curriculum.ts` behind a 52-line facade; no import sites changed.
+2. **Content depth/validation** — **largely RESOLVED (#30–#35).** All 84 lessons are now hand-authored to the seed bar; the formulaic generated content is gone. Remaining: **finance-SME sign-off of the advanced/premium F4–F6 tier** (still `provisional`).
+3. **Mobile dependency CVEs** — ~15 *moderate* advisories gated behind an overdue **Expo 54 → 56** upgrade. (Runbook: `docs/expo-56-upgrade.md`.)
 4. **Documentation sprawl** (see §8).
 5. **Single external dependency for CI security** — the reusable workflows point at a separate `gr8monk3ys/github` repo, a fragility/single-point-of-trust if CI is revived.
 
@@ -127,13 +130,14 @@ This is a real strength — the test suite is good enough to refactor against wi
 
 ## 10. Prioritized roadmap
 
+**Done since this analysis:** ✅ `data.ts` split (#26) · ✅ entire curriculum hand-authored (#30–#35).
+
 **Now (small, high-value, low-risk):**
-- Split `data.ts` into data + generator + queries (unlocks content review; the test suite makes this safe).
 - Right-size `docs/` to a living set; remove superseded snapshots.
 - Tune/document the engine constants and fix the numeric-grading tolerance.
 
 **Next (product & depth):**
-- Editorial validation pass on curriculum content (accuracy, leveling, coverage).
+- **Finance-SME review** of the hand-authored content, especially the advanced/premium F4–F6 tier (still `provisional`).
 - Expo 54 → 56 upgrade (clears the remaining moderate CVEs).
 - Per-account auth throttling.
 
@@ -146,4 +150,4 @@ This is a real strength — the test suite is good enough to refactor against wi
 
 ## Bottom line
 
-Moneta is a **well-built skeleton with a now-secure core loop and a genuinely good test suite**. It is not held back by code quality. To move from "solid prototype" to "shippable product," the work is product-facing — content quality, the `data.ts` refactor, and trimming the process/CI/docs apparatus down to what a product at this stage actually needs.
+Moneta is a **well-built skeleton with a now-secure core loop and a genuinely good test suite**. It is not held back by code quality. Since this analysis, the `data.ts` refactor and a full hand-authored curriculum have landed, so the remaining path to "shippable product" is mostly **finance-SME content review** plus trimming the process/CI/docs apparatus to what a product at this stage actually needs.
