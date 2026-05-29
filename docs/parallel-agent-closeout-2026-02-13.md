@@ -1,6 +1,6 @@
 # Parallel Agent Closeout Plan (2026-02-13)
 
-This plan closes all current P0 blockers from `docs/release-signoff-2026-02-13.md`.
+This plan closes all current P0 blockers from `docs/release-signoff-2026-02-13-updated.md`.
 
 ## In-repo baseline now prepared
 
