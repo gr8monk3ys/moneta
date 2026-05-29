@@ -24,6 +24,7 @@ jest.mock('../src/lib/api', () => ({
   submitPlacement: jest.fn(),
   completeSession: jest.fn(),
   refresh: jest.fn(),
+  refreshSession: jest.fn(),
   logout: jest.fn(),
   logoutAll: jest.fn(),
   exportAccountData: jest.fn(),
@@ -237,7 +238,9 @@ describe('mobile auth-driven screens', () => {
     });
     (api.submitPlacement as jest.Mock).mockResolvedValue({ userId: 'u1', level: 'F3' });
     (api.completeSession as jest.Mock).mockResolvedValue({ userId: 'u1', streakDays: 8, scheduledReviews: [] });
-    (api.refresh as jest.Mock).mockResolvedValue({ accessToken: 'na', refreshToken: 'nr', sessionId: 'ns' });
+    (api.refreshSession as jest.Mock).mockImplementation(async (ctx: { onTokensUpdated: (t: unknown) => void }) => {
+      ctx.onTokensUpdated({ accessToken: 'na', refreshToken: 'nr', sessionId: 'ns' });
+    });
 
     const onTokensUpdated = jest.fn();
     const auth = { accessToken: 'a', refreshToken: 'r', onTokensUpdated };
@@ -365,7 +368,7 @@ describe('mobile auth-driven screens', () => {
   it('shows home error states', async () => {
     (api.fetchProgress as jest.Mock).mockRejectedValue(new Error('dashboard failed'));
     (api.fetchToday as jest.Mock).mockRejectedValue(new Error('dashboard failed'));
-    (api.refresh as jest.Mock).mockRejectedValue(new Error('refresh failed'));
+    (api.refreshSession as jest.Mock).mockRejectedValue(new Error('refresh failed'));
 
     const auth = { accessToken: 'a', refreshToken: 'r', onTokensUpdated: jest.fn() };
     const screen = renderWithQueryClient(

@@ -43,6 +43,10 @@ export interface AuthContext {
   accessToken: string;
   refreshToken: string;
   onTokensUpdated: (tokens: { accessToken: string; refreshToken: string; sessionId: string }) => void;
+  // Invoked when the session can no longer be refreshed (refresh token revoked or
+  // expired). Consumers should clear local auth state and return to the login flow
+  // instead of leaving the app stuck retrying with dead credentials.
+  onAuthInvalidated?: () => void;
 }
 
 export interface ProgressResponse {
@@ -195,11 +199,22 @@ interface SyncEntitlementPayload {
   purchaseToken: string;
 }
 
-const refreshInflight = new Map<string, Promise<AuthResponse>>();
+// A single in-flight refresh shared across all callers. Keying by token string is
+// unsafe: after rotation, different screens hold different snapshots of the refresh
+// token, and the backend now revokes the whole session family if a rotated token is
+// replayed. Collapsing every concurrent refresh into one promise guarantees we only
+// ever spend a refresh token once per burst.
+let refreshInflight: Promise<AuthResponse> | null = null;
+
+interface RequestError extends Error {
+  status?: number;
+}
 
 async function parseError(response: Response): Promise<never> {
   const body = await response.json().catch(() => ({ error: 'Request failed' }));
-  throw new Error(body.error ?? 'Request failed');
+  const error: RequestError = new Error(body.error ?? 'Request failed');
+  error.status = response.status;
+  throw error;
 }
 
 function normalizeRequestError(error: unknown): Error {
@@ -272,23 +287,24 @@ async function getJson<T>(path: string, token?: string): Promise<T> {
 }
 
 function isAuthError(error: unknown): boolean {
+  if ((error as RequestError | undefined)?.status === 401) {
+    return true;
+  }
+
   const message = error instanceof Error ? error.message : '';
   return message === 'Invalid token' || message === 'Missing bearer token';
 }
 
 async function getRefreshedTokens(refreshToken: string): Promise<AuthResponse> {
-  const existing = refreshInflight.get(refreshToken);
-  if (existing) {
-    return existing;
+  if (refreshInflight) {
+    return refreshInflight;
   }
 
-  const inflight = refresh(refreshToken)
-    .finally(() => {
-      refreshInflight.delete(refreshToken);
-    });
+  refreshInflight = refresh(refreshToken).finally(() => {
+    refreshInflight = null;
+  });
 
-  refreshInflight.set(refreshToken, inflight);
-  return inflight;
+  return refreshInflight;
 }
 
 async function withAuthRetry<T>(auth: AuthContext, request: (token: string) => Promise<T>): Promise<T> {
@@ -299,14 +315,31 @@ async function withAuthRetry<T>(auth: AuthContext, request: (token: string) => P
       throw error;
     }
 
-    const rotated = await getRefreshedTokens(auth.refreshToken);
+    let rotated: AuthResponse;
+    try {
+      rotated = await getRefreshedTokens(auth.refreshToken);
+    } catch (refreshError) {
+      // The session can no longer be refreshed. Surface a logout rather than leaving
+      // the caller stuck retrying against a revoked/expired session.
+      auth.onAuthInvalidated?.();
+      throw refreshError;
+    }
+
     auth.onTokensUpdated({
       accessToken: rotated.accessToken,
       refreshToken: rotated.refreshToken,
       sessionId: rotated.sessionId
     });
 
-    return request(rotated.accessToken);
+    try {
+      return await request(rotated.accessToken);
+    } catch (retryError) {
+      // A freshly issued access token that still fails auth means the session is dead.
+      if (isAuthError(retryError)) {
+        auth.onAuthInvalidated?.();
+      }
+      throw retryError;
+    }
   }
 }
 
@@ -337,6 +370,27 @@ export async function confirmPasswordReset(payload: { email: string; code: strin
 
 export async function refresh(refreshToken: string): Promise<AuthResponse> {
   return postJson<AuthResponse>('/api/auth/refresh', { refreshToken });
+}
+
+/**
+ * Rotate the session through the shared, de-duplicated refresh path so a manual
+ * refresh cannot race an in-flight automatic one and spend a token twice. On failure
+ * the session is treated as invalidated.
+ */
+export async function refreshSession(auth: AuthContext): Promise<void> {
+  let rotated: AuthResponse;
+  try {
+    rotated = await getRefreshedTokens(auth.refreshToken);
+  } catch (error) {
+    auth.onAuthInvalidated?.();
+    throw error;
+  }
+
+  auth.onTokensUpdated({
+    accessToken: rotated.accessToken,
+    refreshToken: rotated.refreshToken,
+    sessionId: rotated.sessionId
+  });
 }
 
 export async function logout(refreshToken: string): Promise<void> {

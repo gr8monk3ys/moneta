@@ -35,11 +35,18 @@ async function getStoredAuth(): Promise<string | null> {
 async function setStoredAuth(value: string): Promise<void> {
   const storage = readWebStorage();
   if (storage) {
+    // Web has no secure keystore; tokens live in localStorage and are therefore
+    // readable by any script running in the page (XSS). This is the standard Expo
+    // web limitation — treat web sessions as lower-trust accordingly.
     storage.setItem(AUTH_STORAGE_KEY, value);
     return;
   }
 
-  await SecureStore.setItemAsync(AUTH_STORAGE_KEY, value);
+  // Keep credentials on-device only (no iCloud Keychain sync / encrypted backups)
+  // and require the device to be unlocked to read them.
+  await SecureStore.setItemAsync(AUTH_STORAGE_KEY, value, {
+    keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY
+  });
 }
 
 async function clearStoredAuth(): Promise<void> {
@@ -72,11 +79,23 @@ export function useAuthState() {
           return;
         }
 
-        const parsed = JSON.parse(raw) as AuthState;
+        let parsed: AuthState | null = null;
+        try {
+          parsed = JSON.parse(raw) as AuthState;
+        } catch {
+          // Corrupted stored credentials would otherwise throw on every launch and
+          // never recover. Drop them and start unauthenticated.
+          void clearStoredAuth();
+          return;
+        }
+
         if (parsed.accessToken && parsed.refreshToken && parsed.userId && parsed.sessionId) {
           setAuth(parsed);
+        } else {
+          void clearStoredAuth();
         }
       })
+      .catch(() => undefined)
       .finally(() => {
         setBootstrapping(false);
       });

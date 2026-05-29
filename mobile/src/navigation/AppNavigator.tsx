@@ -20,11 +20,16 @@ const Stack = createNativeStackNavigator<AppStackParamList>();
 const Tabs = createBottomTabNavigator<MainTabParamList>();
 type RootNavigation = NativeStackNavigationProp<AppStackParamList>;
 
-function toAuthContext(auth: NonNullable<ReturnType<typeof useAuth>['auth']>, updateTokens: ReturnType<typeof useAuth>['updateTokens']): AuthContext {
+function toAuthContext(
+  auth: NonNullable<ReturnType<typeof useAuth>['auth']>,
+  updateTokens: ReturnType<typeof useAuth>['updateTokens'],
+  onAuthInvalidated?: ReturnType<typeof useAuth>['logout']
+): AuthContext {
   return {
     accessToken: auth.accessToken,
     refreshToken: auth.refreshToken,
-    onTokensUpdated: updateTokens
+    onTokensUpdated: updateTokens,
+    onAuthInvalidated
   };
 }
 
@@ -51,7 +56,7 @@ function HomeRoute() {
   return (
     <HomeScreen
       userId={auth.auth.userId}
-      auth={toAuthContext(auth.auth, auth.updateTokens)}
+      auth={toAuthContext(auth.auth, auth.updateTokens, auth.logout)}
       onOpenLesson={(lessonId) => parent?.navigate('LessonPlayer', { lessonId })}
       onStartReviews={() => parent?.navigate('ReviewPlayer')}
     />
@@ -69,7 +74,7 @@ function LearnRoute() {
   return (
     <LearnScreen
       userId={auth.auth.userId}
-      auth={toAuthContext(auth.auth, auth.updateTokens)}
+      auth={toAuthContext(auth.auth, auth.updateTokens, auth.logout)}
       onOpenLesson={(lessonId) => parent?.navigate('LessonPlayer', { lessonId })}
     />
   );
@@ -81,7 +86,7 @@ function ProgressRoute() {
     return null;
   }
 
-  return <ProgressScreen userId={auth.auth.userId} auth={toAuthContext(auth.auth, auth.updateTokens)} />;
+  return <ProgressScreen userId={auth.auth.userId} auth={toAuthContext(auth.auth, auth.updateTokens, auth.logout)} />;
 }
 
 function ProfileRoute() {
@@ -93,7 +98,7 @@ function ProfileRoute() {
   return (
     <ProfileScreen
       userId={auth.auth.userId}
-      auth={toAuthContext(auth.auth, auth.updateTokens)}
+      auth={toAuthContext(auth.auth, auth.updateTokens, auth.logout)}
       onLogout={auth.logout}
     />
   );
@@ -121,7 +126,7 @@ function LessonPlayerRoute(props: LessonPlayerRouteProps) {
   }
 
   const userId = auth.auth.userId;
-  const authContext = toAuthContext(auth.auth, auth.updateTokens);
+  const authContext = toAuthContext(auth.auth, auth.updateTokens, auth.logout);
 
   return (
     <LessonPlayerScreen
@@ -151,7 +156,7 @@ function ReviewPlayerRoute(props: ReviewPlayerRouteProps) {
   }
 
   const userId = auth.auth.userId;
-  const authContext = toAuthContext(auth.auth, auth.updateTokens);
+  const authContext = toAuthContext(auth.auth, auth.updateTokens, auth.logout);
 
   return (
     <ReviewPlayerScreen
