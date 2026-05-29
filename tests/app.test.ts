@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { createDefaultEntitlement } from '../src/billing.js';
 import { createBillingVerifier, createWebhookSignature } from '../src/billing.verification.js';
 import { createApp } from '../src/app.js';
+import { createAccountThrottle } from '../src/throttle.js';
 import { listCurriculum } from '../src/data.js';
 import type { EmailService } from '../src/email.js';
 import { errorHandler } from '../src/middleware/errorHandler.js';
@@ -1695,5 +1696,57 @@ describe('Moneta API auth + learning flow', () => {
 
     expect(premiumEntry?.locked).toBe(true);
     expect(premiumEntry?.completed).toBe(false);
+  });
+
+  function buildThrottledApp(maxFailures: number) {
+    const repository = new InMemoryUserRepository();
+    const app = createApp({
+      repository,
+      billingVerifier: createBillingVerifier({
+        nodeEnv: 'development',
+        allowSandboxTokens: true,
+        webhookSecret: 'test-billing-webhook-secret'
+      }),
+      jwtSecret: 'test-secret',
+      jwtRefreshSecret: 'test-refresh-secret',
+      jwtAccessTtlSeconds: 3600,
+      jwtRefreshTtlSeconds: 604800,
+      allowedOrigins: ['http://localhost:5173'],
+      trustProxy: false,
+      accountThrottle: createAccountThrottle({ maxFailures, windowMs: 60_000, lockMs: 60_000 })
+    });
+    return app;
+  }
+
+  it('locks an account after repeated failed logins and returns 429', async () => {
+    const app = buildThrottledApp(3);
+    await request(app).post('/api/auth/register').send({ email: 'lock@example.com', password: 'password123' });
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const res = await request(app).post('/api/auth/login').send({ email: 'lock@example.com', password: 'wrong-pass' });
+      expect(res.status).toBe(401);
+    }
+
+    // Now locked: even the correct password is refused with 429 + Retry-After.
+    const locked = await request(app).post('/api/auth/login').send({ email: 'lock@example.com', password: 'password123' });
+    expect(locked.status).toBe(429);
+    expect(locked.headers['retry-after']).toBeTruthy();
+  });
+
+  it('resets the per-account failure counter on a successful login', async () => {
+    const app = buildThrottledApp(3);
+    await request(app).post('/api/auth/register').send({ email: 'reset@example.com', password: 'password123' });
+
+    // Two failures, then a success clears the counter.
+    await request(app).post('/api/auth/login').send({ email: 'reset@example.com', password: 'wrong-pass' });
+    await request(app).post('/api/auth/login').send({ email: 'reset@example.com', password: 'wrong-pass' });
+    const ok = await request(app).post('/api/auth/login').send({ email: 'reset@example.com', password: 'password123' });
+    expect(ok.status).toBe(200);
+
+    // Two more failures should still be 401 (not locked), since the counter reset.
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const res = await request(app).post('/api/auth/login').send({ email: 'reset@example.com', password: 'wrong-pass' });
+      expect(res.status).toBe(401);
+    }
   });
 });

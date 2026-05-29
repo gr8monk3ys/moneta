@@ -16,11 +16,13 @@ import { registerBillingRoutes } from './routes/billingRoutes.js';
 import { registerLearningRoutes } from './routes/learningRoutes.js';
 import { registerSystemRoutes } from './routes/systemRoutes.js';
 import type { RouteDeps } from './routes/types.js';
+import { createAccountThrottle, type AccountThrottle } from './throttle.js';
 
 interface AppOptions {
   repository: UserRepository;
   billingVerifier?: BillingVerifier;
   emailService?: EmailService;
+  accountThrottle?: AccountThrottle;
   jwtSecret: string;
   jwtRefreshSecret: string;
   jwtAccessTtlSeconds: number;
@@ -64,6 +66,7 @@ export function createApp(options: AppOptions): express.Express {
       webhookSecret: 'dev-billing-webhook-secret'
     }),
     emailService,
+    accountThrottle: options.accountThrottle ?? createAccountThrottle(),
     jwtSecret: options.jwtSecret,
     jwtRefreshSecret: options.jwtRefreshSecret,
     jwtAccessTtlSeconds: options.jwtAccessTtlSeconds,
