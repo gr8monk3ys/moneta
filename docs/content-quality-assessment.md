@@ -7,6 +7,14 @@ from the (solid) code. Based on reading `src/content/curriculum.seed.ts` and
 `src/content/curriculum.generator.ts` in full, plus a live end-to-end run of the
 learning loop.
 
+> **Status update (2026-05-29) — RESOLVED.** The gap below has since been closed.
+> All 84 lessons across F1–F6 are now hand-authored to the seed-quality bar (PRs
+> #30–#35); the formulaic generated lessons and the procedural generator's lesson
+> output were retired. The analysis below is preserved as the rationale and the
+> authoring template. Remaining open item: the advanced/premium **F4–F6** lessons
+> carry `provisional` editorial status and still warrant **finance-SME sign-off**
+> before being marketed as financial education/advice.
+
 ## TL;DR
 
 The catalog shows **84 lessons**, but they're two very different tiers:
