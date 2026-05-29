@@ -1,9 +1,10 @@
 // Assembled curriculum (seed + generated) and read queries.
 import type { Lesson, UserProfile } from '../types.js';
 import { seedLessons } from './curriculum.seed.js';
+import { authoredLessons } from './curriculum.authored.js';
 import { generateLessons, normalizeLessonContent } from './curriculum.generator.js';
 
-export const lessons: Lesson[] = [...seedLessons, ...generateLessons()];
+export const lessons: Lesson[] = [...seedLessons, ...authoredLessons, ...generateLessons()];
 
 // Normalize item formats/choices/acceptable-answers/editorial defaults across the
 // full curriculum (static seed + generated), matching the original load-time pass.
