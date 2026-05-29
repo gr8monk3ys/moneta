@@ -47,6 +47,8 @@ describe('InMemoryUserRepository', () => {
       nowIso
     });
     expect(consumed?.tokenId).toBe('t1');
+    // Parity with the Postgres repository: the consumed record reflects revocation.
+    expect(consumed?.revokedAt).toBe(nowIso);
 
     const consumedAgain = await repo.consumeRefreshToken({
       tokenId: 't1',

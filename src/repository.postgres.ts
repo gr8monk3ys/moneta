@@ -450,7 +450,7 @@ export class PostgresUserRepository implements UserRepository {
 
   public async pruneExpiredRefreshTokens(nowIso: string): Promise<number> {
     const result = await this.pool.query(
-      'DELETE FROM refresh_tokens WHERE expires_at <= $1 RETURNING token_id',
+      'DELETE FROM refresh_tokens WHERE expires_at <= $1::timestamptz RETURNING token_id',
       [nowIso]
     );
 

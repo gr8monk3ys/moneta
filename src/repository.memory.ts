@@ -103,12 +103,12 @@ export class InMemoryUserRepository implements UserRepository {
       return null;
     }
 
-    this.refreshTokens.set(input.tokenId, {
-      ...record,
-      revokedAt: input.nowIso
-    });
+    // Return the post-revocation record so the consumed token reflects revokedAt,
+    // matching the Postgres repository's RETURNING semantics.
+    const consumed: RefreshTokenRecord = { ...record, revokedAt: input.nowIso };
+    this.refreshTokens.set(input.tokenId, consumed);
 
-    return record;
+    return consumed;
   }
 
   public async revokeRefreshToken(tokenId: string): Promise<void> {
