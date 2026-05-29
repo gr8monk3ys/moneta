@@ -490,7 +490,11 @@ export function createWebhookSignature(secret: string, rawBody: Buffer, timestam
 }
 
 export function createBillingVerifier(options: BillingVerifierOptions): BillingVerifier {
-  const allowSandboxTokens = parseBoolean(String(options.allowSandboxTokens), options.nodeEnv !== 'production');
+  // Sandbox purchase tokens grant entitlements without contacting a real provider, so
+  // they must never be honored in production regardless of how the env var is set.
+  const allowSandboxTokens = options.nodeEnv === 'production'
+    ? false
+    : parseBoolean(String(options.allowSandboxTokens), options.nodeEnv !== 'production');
   const hasAppleConfig = Boolean(options.appleSharedSecret);
   const hasGoogleConfig = Boolean(options.googlePackageName && options.googleServiceAccountJson);
 

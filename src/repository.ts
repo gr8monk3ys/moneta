@@ -40,7 +40,12 @@ export interface UserRepository {
   pruneExpiredPasswordResetTokens(nowIso: string): Promise<number>;
   hasProcessedBillingWebhookEvent(eventId: string): Promise<boolean>;
   listBillingWebhookEventsByUser(userId: string): Promise<BillingWebhookEventRecord[]>;
-  markBillingWebhookEventProcessed(record: BillingWebhookEventRecord): Promise<void>;
+  /**
+   * Atomically claim a billing webhook event for processing. Returns `true` if this
+   * call recorded the event (caller should proceed), or `false` if the event was
+   * already recorded (duplicate delivery — caller must not re-apply side effects).
+   */
+  markBillingWebhookEventProcessed(record: BillingWebhookEventRecord): Promise<boolean>;
   deleteUserAccount(userId: string): Promise<boolean>;
   pruneExpiredRefreshTokens(nowIso: string): Promise<number>;
   checkReadiness(): Promise<boolean>;

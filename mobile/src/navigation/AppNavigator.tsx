@@ -20,12 +20,30 @@ const Stack = createNativeStackNavigator<AppStackParamList>();
 const Tabs = createBottomTabNavigator<MainTabParamList>();
 type RootNavigation = NativeStackNavigationProp<AppStackParamList>;
 
-function toAuthContext(auth: NonNullable<ReturnType<typeof useAuth>['auth']>, updateTokens: ReturnType<typeof useAuth>['updateTokens']): AuthContext {
+function toAuthContext(
+  auth: NonNullable<ReturnType<typeof useAuth>['auth']>,
+  updateTokens: ReturnType<typeof useAuth>['updateTokens'],
+  onAuthInvalidated?: ReturnType<typeof useAuth>['logout']
+): AuthContext {
   return {
     accessToken: auth.accessToken,
     refreshToken: auth.refreshToken,
-    onTokensUpdated: updateTokens
+    onTokensUpdated: updateTokens,
+    onAuthInvalidated
   };
+}
+
+// Completing a session can change progress, the daily feed, the path, and any
+// entitlement-derived limits (e.g. free-plan review caps), so invalidate all four.
+function invalidateAfterSession(queryClient: ReturnType<typeof useQueryClient>, userId: string): void {
+  for (const queryKey of [
+    queryKeys.today(userId),
+    queryKeys.progress(userId),
+    queryKeys.learningPath(userId),
+    queryKeys.entitlement(userId)
+  ]) {
+    queryClient.invalidateQueries({ queryKey }).catch(() => undefined);
+  }
 }
 
 function TabBar(props: BottomTabBarProps) {
@@ -51,7 +69,7 @@ function HomeRoute() {
   return (
     <HomeScreen
       userId={auth.auth.userId}
-      auth={toAuthContext(auth.auth, auth.updateTokens)}
+      auth={toAuthContext(auth.auth, auth.updateTokens, auth.logout)}
       onOpenLesson={(lessonId) => parent?.navigate('LessonPlayer', { lessonId })}
       onStartReviews={() => parent?.navigate('ReviewPlayer')}
     />
@@ -69,7 +87,7 @@ function LearnRoute() {
   return (
     <LearnScreen
       userId={auth.auth.userId}
-      auth={toAuthContext(auth.auth, auth.updateTokens)}
+      auth={toAuthContext(auth.auth, auth.updateTokens, auth.logout)}
       onOpenLesson={(lessonId) => parent?.navigate('LessonPlayer', { lessonId })}
     />
   );
@@ -81,7 +99,7 @@ function ProgressRoute() {
     return null;
   }
 
-  return <ProgressScreen userId={auth.auth.userId} auth={toAuthContext(auth.auth, auth.updateTokens)} />;
+  return <ProgressScreen userId={auth.auth.userId} auth={toAuthContext(auth.auth, auth.updateTokens, auth.logout)} />;
 }
 
 function ProfileRoute() {
@@ -93,7 +111,7 @@ function ProfileRoute() {
   return (
     <ProfileScreen
       userId={auth.auth.userId}
-      auth={toAuthContext(auth.auth, auth.updateTokens)}
+      auth={toAuthContext(auth.auth, auth.updateTokens, auth.logout)}
       onLogout={auth.logout}
     />
   );
@@ -121,7 +139,7 @@ function LessonPlayerRoute(props: LessonPlayerRouteProps) {
   }
 
   const userId = auth.auth.userId;
-  const authContext = toAuthContext(auth.auth, auth.updateTokens);
+  const authContext = toAuthContext(auth.auth, auth.updateTokens, auth.logout);
 
   return (
     <LessonPlayerScreen
@@ -130,9 +148,7 @@ function LessonPlayerRoute(props: LessonPlayerRouteProps) {
       auth={authContext}
       onExit={(updated) => {
         if (updated) {
-          queryClient.invalidateQueries({ queryKey: queryKeys.today(userId) }).catch(() => undefined);
-          queryClient.invalidateQueries({ queryKey: queryKeys.progress(userId) }).catch(() => undefined);
-          queryClient.invalidateQueries({ queryKey: queryKeys.learningPath(userId) }).catch(() => undefined);
+          invalidateAfterSession(queryClient, userId);
         }
         props.navigation.goBack();
       }}
@@ -151,7 +167,7 @@ function ReviewPlayerRoute(props: ReviewPlayerRouteProps) {
   }
 
   const userId = auth.auth.userId;
-  const authContext = toAuthContext(auth.auth, auth.updateTokens);
+  const authContext = toAuthContext(auth.auth, auth.updateTokens, auth.logout);
 
   return (
     <ReviewPlayerScreen
@@ -159,9 +175,7 @@ function ReviewPlayerRoute(props: ReviewPlayerRouteProps) {
       auth={authContext}
       onExit={(updated) => {
         if (updated) {
-          queryClient.invalidateQueries({ queryKey: queryKeys.today(userId) }).catch(() => undefined);
-          queryClient.invalidateQueries({ queryKey: queryKeys.progress(userId) }).catch(() => undefined);
-          queryClient.invalidateQueries({ queryKey: queryKeys.learningPath(userId) }).catch(() => undefined);
+          invalidateAfterSession(queryClient, userId);
         }
         props.navigation.goBack();
       }}

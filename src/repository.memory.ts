@@ -103,12 +103,12 @@ export class InMemoryUserRepository implements UserRepository {
       return null;
     }
 
-    this.refreshTokens.set(input.tokenId, {
-      ...record,
-      revokedAt: input.nowIso
-    });
+    // Return the post-revocation record so the consumed token reflects revokedAt,
+    // matching the Postgres repository's RETURNING semantics.
+    const consumed: RefreshTokenRecord = { ...record, revokedAt: input.nowIso };
+    this.refreshTokens.set(input.tokenId, consumed);
 
-    return record;
+    return consumed;
   }
 
   public async revokeRefreshToken(tokenId: string): Promise<void> {
@@ -208,8 +208,13 @@ export class InMemoryUserRepository implements UserRepository {
       .sort((a, b) => new Date(b.processedAt).getTime() - new Date(a.processedAt).getTime());
   }
 
-  public async markBillingWebhookEventProcessed(record: BillingWebhookEventRecord): Promise<void> {
+  public async markBillingWebhookEventProcessed(record: BillingWebhookEventRecord): Promise<boolean> {
+    if (this.billingWebhookEvents.has(record.eventId)) {
+      return false;
+    }
+
     this.billingWebhookEvents.set(record.eventId, record);
+    return true;
   }
 
   public async deleteUserAccount(userId: string): Promise<boolean> {

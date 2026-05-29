@@ -3,8 +3,10 @@ name: semgrep
 on:
   push:
     branches:
-      - "**"
-  pull_request:
+      - main
+  schedule:
+    - cron: '0 8 * * 1'
+  workflow_dispatch:
 
 permissions: read-all
 

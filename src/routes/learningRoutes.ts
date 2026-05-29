@@ -3,8 +3,8 @@ import type { NextFunction } from 'express';
 import { z } from 'zod';
 import { authenticateJwt, type AuthenticatedRequest } from '../auth.js';
 import { normalizeEntitlement, resolveFeatureAccess } from '../billing.js';
-import { getLessonById, getNextLessonForLevel, getNextLessonForProgress, isLessonCompleted, listCurriculum } from '../data.js';
-import { applyItemResult, isValidTimeZone, markSessionActivity, placeUser } from '../engine.js';
+import { getKnownSkillIds, getLessonById, getNextLessonForLevel, getNextLessonForProgress, isLessonCompleted, listCurriculum } from '../data.js';
+import { applyItemResult, higherLevel, isValidTimeZone, markSessionActivity, placeUser } from '../engine.js';
 import { ApiError } from '../errors.js';
 import type { ReviewItem, UserProfile } from '../types.js';
 import type { RouteDeps } from './types.js';
@@ -21,8 +21,12 @@ const sessionItemSchema = z.object({
   answer: z.string().min(1).optional()
 });
 
+// A single session covers one lesson or review batch; cap the array so a client
+// cannot replay an item hundreds of times in one request to inflate mastery.
+const MAX_SESSION_ITEMS = 100;
+
 const sessionSchema = z.object({
-  itemResults: z.array(sessionItemSchema),
+  itemResults: z.array(sessionItemSchema).min(1).max(MAX_SESSION_ITEMS),
   lessonId: z.string().min(1).optional(),
   timeZone: z.string().min(1).optional()
 }).superRefine((data, ctx) => {
@@ -271,9 +275,16 @@ function ensureCompletedLessons(user: UserProfile): Record<string, NonNullable<U
 
 function syncMasteryCompletions(user: UserProfile, nowIso: string): void {
   const completedLessons = ensureCompletedLessons(user);
+  const features = resolveFeatureAccess(normalizeEntitlement(user.entitlement));
 
   for (const lesson of listCurriculum(true)) {
     if (completedLessons[lesson.lessonId]) {
+      continue;
+    }
+
+    // Never auto-complete premium lessons for users without entitlement; otherwise a
+    // free user could unlock paid content by raising mastery through free practice.
+    if (lesson.premium && !features.advancedTracks) {
       continue;
     }
 
@@ -557,7 +568,8 @@ export function registerLearningRoutes(app: express.Express, deps: RouteDeps): v
 
       const userId = String(req.auth?.sub ?? '');
       const user = await findUserOrThrow(deps, userId);
-      user.currentLevel = placeUser(parsed.data.correctAnswers, parsed.data.totalQuestions);
+      // Placement may be re-run; never let a low score demote a user who has progressed.
+      user.currentLevel = higherLevel(user.currentLevel, placeUser(parsed.data.correctAnswers, parsed.data.totalQuestions));
       await deps.repository.upsertUserProfile(user);
       res.status(200).json({ userId, level: user.currentLevel });
     }).catch(next);
@@ -677,6 +689,14 @@ export function registerLearningRoutes(app: express.Express, deps: RouteDeps): v
             isCorrect: Boolean(item.isCorrect)
           }));
         }
+      }
+
+      // Reject results for skills that do not exist in the curriculum so a client
+      // cannot create arbitrary mastery entries by self-reporting unknown skillIds.
+      const knownSkillIds = getKnownSkillIds();
+      const unknownSkill = computedResults.find((item) => !knownSkillIds.has(item.skillId));
+      if (unknownSkill) {
+        throw new ApiError(400, 'Session itemResults contained an unknown skillId');
       }
 
       const scheduledReviews = computedResults.map((item) => applyItemResult(user, item.skillId, item.isCorrect));

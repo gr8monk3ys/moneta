@@ -44,6 +44,25 @@ describe('billing verification', () => {
     expect(android.source).toBe('android');
   });
 
+  it('never honors sandbox purchase tokens in production even if explicitly enabled', async () => {
+    const verifier = createBillingVerifier({
+      nodeEnv: 'production',
+      // Misconfiguration: sandbox purchases flagged on in production must still be ignored.
+      allowSandboxTokens: true,
+      webhookSecret: 'webhook-secret',
+      appleSharedSecret: 'apple-shared-secret'
+    });
+
+    // No fetch stub: a honored sandbox token would resolve without any network call.
+    // Because sandbox is force-disabled, this instead falls through to real Apple
+    // verification, which fails fast against the (unstubbed) network.
+    await expect(verifier.verifyPurchase({
+      platform: 'ios',
+      productId: 'moneta.pro.monthly',
+      purchaseToken: 'sandbox-ios-token'
+    })).rejects.toBeTruthy();
+  });
+
   it('rejects Apple receipts that do not match the requested productId', async () => {
     const now = new Date('2026-02-15T00:00:00.000Z');
 

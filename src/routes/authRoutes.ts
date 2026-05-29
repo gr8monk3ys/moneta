@@ -208,6 +208,13 @@ async function refreshHandler(req: Request, res: Response, deps: RouteDeps): Pro
   });
 
   if (!consumedToken) {
+    // The signature verified, so this is a well-formed token for a real session.
+    // If the exact token exists but is already revoked, it is being replayed after
+    // rotation — a strong signal of theft. Revoke the whole session family.
+    const existing = await deps.repository.getRefreshToken(claims.jti);
+    if (existing && existing.tokenHash === providedHash && existing.revokedAt) {
+      await deps.repository.revokeRefreshTokensBySession(claims.sub, claims.sid);
+    }
     throw new ApiError(401, 'Invalid refresh token');
   }
 

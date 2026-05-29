@@ -381,8 +381,8 @@ export class PostgresUserRepository implements UserRepository {
     return result.rows.map((row) => toBillingWebhookRecord(row as Record<string, unknown>));
   }
 
-  public async markBillingWebhookEventProcessed(record: BillingWebhookEventRecord): Promise<void> {
-    await this.pool.query(
+  public async markBillingWebhookEventProcessed(record: BillingWebhookEventRecord): Promise<boolean> {
+    const result = await this.pool.query(
       `
       INSERT INTO billing_webhook_events (event_id, user_id, platform, product_id, payload_hash, processed_at)
       VALUES ($1, $2, $3, $4, $5, $6)
@@ -397,6 +397,9 @@ export class PostgresUserRepository implements UserRepository {
         record.processedAt
       ]
     );
+
+    // rowCount is 1 when this call inserted the row, 0 when ON CONFLICT skipped it.
+    return (result.rowCount ?? 0) > 0;
   }
 
   public async deleteUserAccount(userId: string): Promise<boolean> {
@@ -447,7 +450,7 @@ export class PostgresUserRepository implements UserRepository {
 
   public async pruneExpiredRefreshTokens(nowIso: string): Promise<number> {
     const result = await this.pool.query(
-      'DELETE FROM refresh_tokens WHERE expires_at <= $1 RETURNING token_id',
+      'DELETE FROM refresh_tokens WHERE expires_at <= $1::timestamptz RETURNING token_id',
       [nowIso]
     );
 

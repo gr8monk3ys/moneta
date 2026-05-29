@@ -51,7 +51,7 @@ export function createAccessToken(
   secret: string,
   expiresInSeconds: number
 ): string {
-  return jwt.sign({ email }, secret, { subject: userId, expiresIn: expiresInSeconds });
+  return jwt.sign({ email }, secret, { subject: userId, expiresIn: expiresInSeconds, algorithm: 'HS256' });
 }
 
 export function createRefreshToken(
@@ -66,7 +66,8 @@ export function createRefreshToken(
   const token = jwt.sign({ email, sid: sessionId }, secret, {
     subject: userId,
     jwtid: tokenId,
-    expiresIn: expiresInSeconds
+    expiresIn: expiresInSeconds,
+    algorithm: 'HS256'
   });
 
   return {
@@ -78,7 +79,7 @@ export function createRefreshToken(
 }
 
 export function verifyRefreshToken(token: string, secret: string): RefreshClaims {
-  const payload = jwt.verify(token, secret) as jwt.JwtPayload;
+  const payload = jwt.verify(token, secret, { algorithms: ['HS256'] }) as jwt.JwtPayload;
   return {
     sub: String(payload.sub ?? ''),
     email: String(payload.email ?? ''),
@@ -105,7 +106,7 @@ export function authenticateJwt(secret: string) {
 
     const token = header.slice('Bearer '.length);
     try {
-      const payload = jwt.verify(token, secret) as jwt.JwtPayload;
+      const payload = jwt.verify(token, secret, { algorithms: ['HS256'] }) as jwt.JwtPayload;
       req.auth = {
         sub: String(payload.sub ?? ''),
         email: String(payload.email ?? '')

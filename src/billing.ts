@@ -112,6 +112,35 @@ export function resolveFeatureAccess(entitlement: SubscriptionEntitlement, now: 
   };
 }
 
+/**
+ * Decide whether an inbound billing webhook event should be ignored as stale.
+ *
+ * Webhooks can arrive out of order or be redelivered, so we never let a webhook
+ * shorten or revoke an entitlement that is currently active and whose paid period
+ * extends at least as far as the incoming event claims. A genuine renewal (later
+ * period end) still applies, and a brand-new purchase applies when nothing active
+ * is on file. Expiry of an active-but-stale entitlement is still enforced lazily by
+ * `isProEntitled`, so skipping a stale downgrade does not grant unpaid access.
+ */
+export function isStaleEntitlementUpdate(
+  current: SubscriptionEntitlement,
+  incomingPeriodEndsAt: string | undefined,
+  now: Date = new Date()
+): boolean {
+  const normalizedCurrent = normalizeEntitlement(current, now);
+  if (!isProEntitled(normalizedCurrent, now) || !normalizedCurrent.currentPeriodEndsAt) {
+    return false;
+  }
+
+  const currentEnd = new Date(normalizedCurrent.currentPeriodEndsAt).getTime();
+  const incomingEnd = incomingPeriodEndsAt ? Date.parse(incomingPeriodEndsAt) : now.getTime();
+  if (Number.isNaN(incomingEnd)) {
+    return true;
+  }
+
+  return incomingEnd <= currentEnd;
+}
+
 interface SyncEntitlementInput {
   source: EntitlementSource;
   productId?: string;

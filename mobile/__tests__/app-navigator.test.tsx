@@ -131,7 +131,9 @@ describe('AppNavigator', () => {
     await waitFor(() => {
       expect(screen.getByText('Home Mock')).toBeTruthy();
     });
-    expect(invalidateSpy).toHaveBeenCalledTimes(3);
+    expect(invalidateSpy).toHaveBeenCalledTimes(4);
+    // Completing a lesson can change entitlement-derived limits, so it must be invalidated too.
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: expect.arrayContaining(['entitlement']) });
 
     fireEvent.press(screen.getByText('Open Reviews'));
     await waitFor(() => {
@@ -142,7 +144,7 @@ describe('AppNavigator', () => {
     await waitFor(() => {
       expect(screen.getByText('Home Mock')).toBeTruthy();
     });
-    expect(invalidateSpy).toHaveBeenCalledTimes(6);
+    expect(invalidateSpy).toHaveBeenCalledTimes(8);
 
     fireEvent.press(screen.getByText('Learn'));
     await waitFor(() => {
@@ -294,7 +296,7 @@ describe('AppNavigator', () => {
     fireEvent.press(screen.getByText('Finish Lesson'));
 
     await waitFor(() => {
-      expect(invalidateSpy).toHaveBeenCalledTimes(3);
+      expect(invalidateSpy).toHaveBeenCalledTimes(4);
     });
     expect(goBack).toHaveBeenCalled();
   });
@@ -316,7 +318,7 @@ describe('AppNavigator', () => {
     fireEvent.press(screen.getByText('Finish Lesson'));
 
     await waitFor(() => {
-      expect(invalidateSpy).toHaveBeenCalledTimes(3);
+      expect(invalidateSpy).toHaveBeenCalledTimes(4);
     });
     expect(goBack).toHaveBeenCalled();
   });
@@ -338,7 +340,7 @@ describe('AppNavigator', () => {
     fireEvent.press(screen.getByText('Finish Reviews'));
 
     await waitFor(() => {
-      expect(invalidateSpy).toHaveBeenCalledTimes(3);
+      expect(invalidateSpy).toHaveBeenCalledTimes(4);
     });
     expect(goBack).toHaveBeenCalled();
   });
@@ -360,7 +362,7 @@ describe('AppNavigator', () => {
     fireEvent.press(screen.getByText('Finish Reviews'));
 
     await waitFor(() => {
-      expect(invalidateSpy).toHaveBeenCalledTimes(3);
+      expect(invalidateSpy).toHaveBeenCalledTimes(4);
     });
     expect(goBack).toHaveBeenCalled();
   });

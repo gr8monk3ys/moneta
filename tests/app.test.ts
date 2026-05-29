@@ -327,6 +327,31 @@ describe('Moneta API auth + learning flow', () => {
     expect(sessionBad.status).toBe(400);
   });
 
+  it('does not demote a user when placement is re-run with a lower score', async () => {
+    const { app, accessToken, userId } = await buildAuthedApp();
+
+    const high = await request(app)
+      .post('/api/onboarding/placement')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ correctAnswers: 10, totalQuestions: 10 });
+    expect(high.status).toBe(200);
+    const placedLevel = high.body.level as string;
+    expect(placedLevel).toBe('F6');
+
+    // Re-running placement with a poor score must not downgrade the established level.
+    const low = await request(app)
+      .post('/api/onboarding/placement')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ correctAnswers: 0, totalQuestions: 10 });
+    expect(low.status).toBe(200);
+    expect(low.body.level).toBe('F6');
+
+    const progress = await request(app)
+      .get(`/api/progress/${userId}`)
+      .set('Authorization', `Bearer ${accessToken}`);
+    expect(progress.body.currentLevel).toBe('F6');
+  });
+
   it('supports learn/progress/session happy path', async () => {
     const { app, accessToken, userId } = await buildAuthedApp();
 
@@ -1382,6 +1407,12 @@ describe('Moneta API auth + learning flow', () => {
     const unauthorized = await request(app).get('/metrics');
     expect(unauthorized.status).toBe(401);
 
+    // Wrong token of a different length must also be rejected (constant-time compare path).
+    const wrongLength = await request(app)
+      .get('/metrics')
+      .set('Authorization', 'Bearer metrics-token-but-longer');
+    expect(wrongLength.status).toBe(401);
+
     const authorized = await request(app)
       .get('/metrics')
       .set('Authorization', 'Bearer metrics-token');
@@ -1531,5 +1562,138 @@ describe('Moneta API auth + learning flow', () => {
 
     expect(response.status).toBe(500);
     expect(response.body.error).toContain('Email service is not configured');
+  });
+
+  it('does not let a stale billing webhook downgrade an active subscription', async () => {
+    const { app } = buildApp();
+    const register = await request(app).post('/api/auth/register').send({
+      email: 'stale-webhook@example.com',
+      password: 'password123'
+    });
+    const userId = register.body.userId as string;
+
+    const sendWebhook = async (payload: Record<string, unknown>) => {
+      const payloadJson = JSON.stringify(payload);
+      const timestamp = String(Math.floor(Date.now() / 1000));
+      const signature = createWebhookSignature('test-billing-webhook-secret', Buffer.from(payloadJson), timestamp);
+      return request(app)
+        .post('/api/billing/webhooks/reconcile')
+        .set('Content-Type', 'application/json')
+        .set('x-billing-signature', signature)
+        .set('x-billing-timestamp', timestamp)
+        .send(payloadJson);
+    };
+
+    const activate = await sendWebhook({
+      eventId: 'evt_active_001',
+      userId,
+      platform: 'ios',
+      productId: 'moneta.pro.monthly',
+      isActive: true,
+      currentPeriodEndsAt: new Date(Date.now() + 30 * 86_400_000).toISOString()
+    });
+    expect(activate.body.entitlement.plan).toBe('pro');
+
+    // A late/out-of-order cancellation for an already-expired period must not revoke
+    // the user who is still paid through the future period end.
+    const staleCancel = await sendWebhook({
+      eventId: 'evt_cancel_stale',
+      userId,
+      platform: 'ios',
+      productId: 'moneta.pro.monthly',
+      isActive: false,
+      currentPeriodEndsAt: new Date(Date.now() - 86_400_000).toISOString()
+    });
+
+    expect(staleCancel.status).toBe(200);
+    expect(staleCancel.body.processed).toBe(false);
+    expect(staleCancel.body.stale).toBe(true);
+    expect(staleCancel.body.entitlement.plan).toBe('pro');
+
+    // A genuine renewal that extends the period still applies.
+    const renew = await sendWebhook({
+      eventId: 'evt_renew',
+      userId,
+      platform: 'ios',
+      productId: 'moneta.pro.monthly',
+      isActive: true,
+      currentPeriodEndsAt: new Date(Date.now() + 60 * 86_400_000).toISOString()
+    });
+    expect(renew.body.processed).toBe(true);
+    expect(renew.body.entitlement.plan).toBe('pro');
+  });
+
+  it('revokes the whole session family when a rotated refresh token is replayed', async () => {
+    const { app, refreshToken } = await buildAuthedApp();
+
+    const rotated = await request(app).post('/api/auth/refresh').send({ refreshToken });
+    expect(rotated.status).toBe(200);
+    const rotatedRefreshToken = rotated.body.refreshToken as string;
+
+    // Replaying the original (now-revoked) token signals theft and must fail.
+    const replay = await request(app).post('/api/auth/refresh').send({ refreshToken });
+    expect(replay.status).toBe(401);
+
+    // ...and it must also invalidate the legitimately rotated token in that session.
+    const afterReuse = await request(app).post('/api/auth/refresh').send({ refreshToken: rotatedRefreshToken });
+    expect(afterReuse.status).toBe(401);
+  });
+
+  it('rejects session results for unknown skills and oversized payloads', async () => {
+    const { app, userId, accessToken } = await buildAuthedApp();
+
+    const unknownSkill = await request(app)
+      .post('/api/sessions/complete')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ itemResults: [{ skillId: 'totally-not-a-real-skill', isCorrect: true }] });
+    expect(unknownSkill.status).toBe(400);
+
+    const oversized = await request(app)
+      .post('/api/sessions/complete')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        itemResults: Array.from({ length: 101 }, () => ({ skillId: 'apr-vs-apy', isCorrect: true }))
+      });
+    expect(oversized.status).toBe(400);
+    expect(userId).toBeTruthy();
+  });
+
+  it('does not auto-complete premium lessons from mastery for free users', async () => {
+    const { app, userId, accessToken } = await buildAuthedApp();
+
+    const premiumLesson = listCurriculum(true).find((lesson) => {
+      const uniqueSkills = new Set(lesson.items.map((item) => item.skillId)).size;
+      return lesson.premium && uniqueSkills * 6 <= 100;
+    });
+    expect(premiumLesson).toBeTruthy();
+    const premiumSkillIds = [...new Set(premiumLesson!.items.map((item) => item.skillId))];
+
+    // Drive every skill in the premium lesson above the 0.8 mastery threshold via
+    // self-reported practice (six correct answers each: 0.2 -> 0.8).
+    const masteryResults = premiumSkillIds.flatMap((skillId) =>
+      Array.from({ length: 6 }, () => ({ skillId, isCorrect: true }))
+    );
+    const grind = await request(app)
+      .post('/api/sessions/complete')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ itemResults: masteryResults });
+    expect(grind.status).toBe(200);
+
+    // A subsequent session triggers the mastery-based completion sweep.
+    const freeSkillId = listCurriculum(false)[0].items[0].skillId;
+    const trigger = await request(app)
+      .post('/api/sessions/complete')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ itemResults: [{ skillId: freeSkillId, isCorrect: true }] });
+    expect(trigger.status).toBe(200);
+
+    const path = await request(app)
+      .get(`/api/learn/path/${userId}`)
+      .set('Authorization', `Bearer ${accessToken}`);
+    const premiumEntry = (path.body.lessons as Array<{ lessonId: string; completed: boolean; locked: boolean }>)
+      .find((lesson) => lesson.lessonId === premiumLesson!.lessonId);
+
+    expect(premiumEntry?.locked).toBe(true);
+    expect(premiumEntry?.completed).toBe(false);
   });
 });

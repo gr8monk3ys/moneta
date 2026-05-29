@@ -102,6 +102,72 @@ describe('mobile api auth retry', () => {
     expect(protectedCalls).toBe(4);
   });
 
+  it('invalidates the session and logs out when the refresh token is rejected', async () => {
+    const fetchMock = jest.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/api/auth/refresh')) {
+        return { ok: false, status: 401, json: async () => ({ error: 'Invalid refresh token' }) } as Response;
+      }
+      if (url.endsWith('/api/progress/user-1')) {
+        return { ok: false, status: 401, json: async () => ({ error: 'Invalid token' }) } as Response;
+      }
+      throw new Error(`Unhandled request: ${url}`);
+    });
+    jest.spyOn(globalThis, 'fetch').mockImplementation(fetchMock);
+
+    const onAuthInvalidated = jest.fn();
+    const auth: AuthContext = {
+      accessToken: 'dead-access',
+      refreshToken: 'dead-refresh',
+      onTokensUpdated: jest.fn(),
+      onAuthInvalidated
+    };
+
+    await expect(fetchProgress('user-1', auth)).rejects.toBeTruthy();
+    expect(onAuthInvalidated).toHaveBeenCalledTimes(1);
+  });
+
+  it('treats an HTTP 401 status as an auth error and refreshes once', async () => {
+    let protectedCalls = 0;
+    const fetchMock = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith('/api/auth/refresh')) {
+        return {
+          ok: true,
+          json: async () => ({ accessToken: 'fresh', refreshToken: 'fresh-r', sessionId: 's2' })
+        } as Response;
+      }
+      if (url.endsWith('/api/progress/user-1')) {
+        protectedCalls += 1;
+        const authHeader = (init?.headers as Record<string, string> | undefined)?.Authorization;
+        // No recognizable error message — only the 401 status signals the auth failure.
+        if (authHeader === 'Bearer stale') {
+          return { ok: false, status: 401, json: async () => ({ error: 'opaque gateway error' }) } as Response;
+        }
+        return {
+          ok: true,
+          json: async () => ({
+            userId: 'user-1',
+            currentLevel: 'F1',
+            streakDays: 1,
+            masteredSkills: 0,
+            totalSkills: 0,
+            plan: 'free',
+            premiumActive: false
+          })
+        } as Response;
+      }
+      throw new Error(`Unhandled request: ${url}`);
+    });
+    jest.spyOn(globalThis, 'fetch').mockImplementation(fetchMock);
+
+    const auth: AuthContext = { accessToken: 'stale', refreshToken: 'r', onTokensUpdated: jest.fn() };
+    const result = await fetchProgress('user-1', auth);
+
+    expect(result.userId).toBe('user-1');
+    expect(protectedCalls).toBe(2);
+  });
+
   it('supports non-auth calls and propagates non-auth errors', async () => {
     const fetchSpy = jest.spyOn(globalThis, 'fetch').mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { completeSession, fetchLessonDetails, fetchProgress, fetchToday, refresh, submitPlacement, type AuthContext } from '../lib/api';
+import { completeSession, fetchLessonDetails, fetchProgress, fetchToday, refreshSession, submitPlacement, type AuthContext } from '../lib/api';
 import { getLevelMeta } from '../lib/learningMetadata';
 import { queryKeys } from '../lib/queryKeys';
 import { theme } from '../lib/theme';
@@ -183,12 +183,7 @@ export function HomeScreen(props: HomeProps) {
     setStatus(null);
 
     try {
-      const tokens = await refresh(props.auth.refreshToken);
-      props.auth.onTokensUpdated({
-        accessToken: tokens.accessToken,
-        refreshToken: tokens.refreshToken,
-        sessionId: tokens.sessionId
-      });
+      await refreshSession(props.auth);
       setStatus('Session refreshed');
     } catch (error) {
       setStatus(formatError(error));
