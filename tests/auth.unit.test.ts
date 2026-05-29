@@ -50,4 +50,16 @@ describe('auth helpers', () => {
       sid: 'session-1'
     });
   });
+
+  it('rejects refresh tokens that are not signed with the pinned HS256 algorithm', () => {
+    // A token with `alg: none` carries no signature; verification must refuse it
+    // rather than accept any algorithm advertised in the token header.
+    const forged = jwt.sign({ email: 'user@example.com', sid: 'session-1' }, '', {
+      algorithm: 'none',
+      subject: 'user-1',
+      jwtid: 'jti-1'
+    });
+
+    expect(() => verifyRefreshToken(forged, 'refresh-secret')).toThrow();
+  });
 });

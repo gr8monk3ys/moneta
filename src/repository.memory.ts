@@ -208,8 +208,13 @@ export class InMemoryUserRepository implements UserRepository {
       .sort((a, b) => new Date(b.processedAt).getTime() - new Date(a.processedAt).getTime());
   }
 
-  public async markBillingWebhookEventProcessed(record: BillingWebhookEventRecord): Promise<void> {
+  public async markBillingWebhookEventProcessed(record: BillingWebhookEventRecord): Promise<boolean> {
+    if (this.billingWebhookEvents.has(record.eventId)) {
+      return false;
+    }
+
     this.billingWebhookEvents.set(record.eventId, record);
+    return true;
   }
 
   public async deleteUserAccount(userId: string): Promise<boolean> {

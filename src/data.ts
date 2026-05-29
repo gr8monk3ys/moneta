@@ -2140,6 +2140,17 @@ export function getLessonById(lessonId: string): Lesson | undefined {
   return lessons.find((lesson) => lesson.lessonId === lessonId);
 }
 
+let knownSkillIds: Set<string> | undefined;
+
+/** Set of every skillId that appears in the curriculum. Used to reject results for skills that do not exist. */
+export function getKnownSkillIds(): Set<string> {
+  if (!knownSkillIds) {
+    knownSkillIds = new Set(lessons.flatMap((lesson) => lesson.items.map((item) => item.skillId)));
+  }
+
+  return knownSkillIds;
+}
+
 export function getNextLessonForLevel(level: Lesson['level'], includePremium: boolean): Lesson | undefined {
   return getNextLessonForLevelFromCurriculum(listCurriculum(includePremium), level);
 }

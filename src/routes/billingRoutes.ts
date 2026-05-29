@@ -3,7 +3,7 @@ import type express from 'express';
 import type { NextFunction } from 'express';
 import { z } from 'zod';
 import { authenticateJwt, type AuthenticatedRequest } from '../auth.js';
-import { applyEntitlementSync, normalizeEntitlement, resolveFeatureAccess } from '../billing.js';
+import { applyEntitlementSync, isStaleEntitlementUpdate, normalizeEntitlement, resolveFeatureAccess } from '../billing.js';
 import { ApiError } from '../errors.js';
 import type { UserProfile } from '../types.js';
 import type { RouteDeps } from './types.js';
@@ -64,7 +64,10 @@ function resolveRawBody(req: { rawBody?: Buffer; body: unknown }): Buffer {
     return rawBody;
   }
 
-  return Buffer.from(JSON.stringify(req.body ?? {}));
+  // The HMAC must be verified over the exact bytes the provider signed. A
+  // re-serialized body would not match a legitimate signature and could let the
+  // signed bytes diverge from the parsed body, so require the captured raw buffer.
+  throw new ApiError(400, 'Billing webhook requires a raw request body');
 }
 
 export function registerBillingRoutes(app: express.Express, deps: RouteDeps): void {
@@ -128,8 +131,22 @@ export function registerBillingRoutes(app: express.Express, deps: RouteDeps): vo
         throw new ApiError(400, 'Invalid currentPeriodEndsAt value');
       }
 
-      const alreadyProcessed = await deps.repository.hasProcessedBillingWebhookEvent(parsed.data.eventId);
-      if (alreadyProcessed) {
+      const user = await findUserOrThrow(deps, parsed.data.userId);
+
+      // Claim the event atomically before applying side effects. A redelivery of the
+      // same eventId returns false and is reported as a duplicate without re-applying.
+      // This runs before the staleness check so an exact retry is treated as a
+      // duplicate rather than a (separate) stale event.
+      const claimed = await deps.repository.markBillingWebhookEventProcessed({
+        eventId: parsed.data.eventId,
+        userId: parsed.data.userId,
+        platform: parsed.data.platform,
+        productId: parsed.data.productId,
+        payloadHash: hashPayload(rawBody),
+        processedAt: new Date().toISOString()
+      });
+
+      if (!claimed) {
         res.status(200).json({
           eventId: parsed.data.eventId,
           userId: parsed.data.userId,
@@ -139,7 +156,20 @@ export function registerBillingRoutes(app: express.Express, deps: RouteDeps): vo
         return;
       }
 
-      const user = await findUserOrThrow(deps, parsed.data.userId);
+      // Out-of-order events must never downgrade a currently active entitlement that
+      // is paid through at least as far as this (distinct) event claims. The event is
+      // already recorded as processed above, so it will not be reprocessed.
+      if (isStaleEntitlementUpdate(user.entitlement, parsed.data.currentPeriodEndsAt)) {
+        res.status(200).json({
+          eventId: parsed.data.eventId,
+          duplicate: false,
+          processed: false,
+          stale: true,
+          ...buildEntitlementResponse(parsed.data.userId, user)
+        });
+        return;
+      }
+
       applyEntitlementSync(user, {
         source: parsed.data.platform,
         productId: parsed.data.productId,
@@ -148,14 +178,6 @@ export function registerBillingRoutes(app: express.Express, deps: RouteDeps): vo
       });
 
       await deps.repository.upsertUserProfile(user);
-      await deps.repository.markBillingWebhookEventProcessed({
-        eventId: parsed.data.eventId,
-        userId: parsed.data.userId,
-        platform: parsed.data.platform,
-        productId: parsed.data.productId,
-        payloadHash: hashPayload(rawBody),
-        processedAt: new Date().toISOString()
-      });
 
       res.status(200).json({
         eventId: parsed.data.eventId,
