@@ -5,24 +5,55 @@ interface SessionActivityOptions {
   timeZone?: string;
 }
 
+// --- Tunable learning-engine constants ---
+// Per-skill mastery is a 0..1 estimate. A correct answer nudges it up; an incorrect
+// one down by slightly less, so a single correct answer does not fully erase a miss.
+// These are starting heuristics and should be revisited with real learner data.
+const INITIAL_SKILL_MASTERY = 0.2;
+const MASTERY_CORRECT_DELTA = 0.1;
+const MASTERY_INCORRECT_DELTA = -0.07;
+/** Mastery at or above this counts a skill as "mastered" (used for progress + lesson completion). */
+export const MASTERY_THRESHOLD = 0.8;
+
+// Spaced-repetition review intervals (hours) by mastery tier: stronger skills resurface less often.
+const REVIEW_STRONG_MASTERY = 0.8;
+const REVIEW_MEDIUM_MASTERY = 0.5;
+const REVIEW_INTERVAL_STRONG_HOURS = 72;
+const REVIEW_INTERVAL_MEDIUM_HOURS = 48;
+const REVIEW_INTERVAL_WEAK_HOURS = 24;
+
+// Placement: score (correct/total) maps onto finance levels. Each entry is the
+// exclusive upper bound for that level; scores at/above the last bound place at F6.
+const PLACEMENT_THRESHOLDS: ReadonlyArray<{ readonly maxScore: number; readonly level: FinanceLevel }> = [
+  { maxScore: 0.35, level: 'F1' },
+  { maxScore: 0.55, level: 'F2' },
+  { maxScore: 0.75, level: 'F3' },
+  { maxScore: 0.9, level: 'F4' },
+  { maxScore: 0.97, level: 'F5' }
+];
+
 function calculatePlacementLevel(correctAnswers: number, total: number): FinanceLevel {
   const score = total === 0 ? 0 : correctAnswers / total;
-  if (score < 0.35) return 'F1';
-  if (score < 0.55) return 'F2';
-  if (score < 0.75) return 'F3';
-  if (score < 0.9) return 'F4';
-  if (score < 0.97) return 'F5';
+  for (const tier of PLACEMENT_THRESHOLDS) {
+    if (score < tier.maxScore) {
+      return tier.level;
+    }
+  }
   return 'F6';
 }
 
 function nextMastery(previous: number, isCorrect: boolean): number {
-  const delta = isCorrect ? 0.1 : -0.07;
+  const delta = isCorrect ? MASTERY_CORRECT_DELTA : MASTERY_INCORRECT_DELTA;
   const updated = previous + delta;
   return Math.min(1, Math.max(0, Number(updated.toFixed(2))));
 }
 
 function dueReviewDate(mastery: number, now: Date): string {
-  const hours = mastery > 0.8 ? 72 : mastery > 0.5 ? 48 : 24;
+  const hours = mastery > REVIEW_STRONG_MASTERY
+    ? REVIEW_INTERVAL_STRONG_HOURS
+    : mastery > REVIEW_MEDIUM_MASTERY
+      ? REVIEW_INTERVAL_MEDIUM_HOURS
+      : REVIEW_INTERVAL_WEAK_HOURS;
   const dueAt = new Date(now.getTime() + hours * 60 * 60 * 1000);
   return dueAt.toISOString();
 }
@@ -75,7 +106,7 @@ export function higherLevel(a: FinanceLevel, b: FinanceLevel): FinanceLevel {
 
 export function applyItemResult(profile: UserProfile, skillId: string, isCorrect: boolean): ReviewItem {
   const now = new Date();
-  const skill = profile.skills[skillId] ?? { skillId, mastery: 0.2 };
+  const skill = profile.skills[skillId] ?? { skillId, mastery: INITIAL_SKILL_MASTERY };
   const mastery = nextMastery(skill.mastery, isCorrect);
   const dueDate = dueReviewDate(mastery, now);
 

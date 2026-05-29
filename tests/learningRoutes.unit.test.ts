@@ -109,6 +109,13 @@ describe('learning route helpers', () => {
     expect(learningTestables.isAnswerCorrect('letters only', ['20%'])).toBe(false);
     expect(learningTestables.isAnswerCorrect('0.2', ['20%'])).toBe(true);
     expect(learningTestables.isAnswerCorrect('19', ['letters only'])).toBe(false);
+
+    // Magnitude-scaled tolerance: trivial rounding on a large answer passes, but a
+    // clearly wrong integer (off by 1 on 1200) still fails.
+    expect(learningTestables.isAnswerCorrect('1200.05', ['1200'])).toBe(true);
+    expect(learningTestables.isAnswerCorrect('1199', ['1200'])).toBe(false);
+    // Small/integer answers remain near-exact.
+    expect(learningTestables.isAnswerCorrect('301', ['300'])).toBe(false);
   });
 
   it('grades lesson answers across validation and mismatch branches', () => {

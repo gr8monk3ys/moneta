@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { authenticateJwt, type AuthenticatedRequest } from '../auth.js';
 import { normalizeEntitlement, resolveFeatureAccess } from '../billing.js';
 import { getKnownSkillIds, getLessonById, getNextLessonForLevel, getNextLessonForProgress, isLessonCompleted, listCurriculum } from '../data.js';
-import { applyItemResult, higherLevel, isValidTimeZone, markSessionActivity, placeUser } from '../engine.js';
+import { applyItemResult, higherLevel, isValidTimeZone, markSessionActivity, MASTERY_THRESHOLD, placeUser } from '../engine.js';
 import { ApiError } from '../errors.js';
 import type { ReviewItem, UserProfile } from '../types.js';
 import type { RouteDeps } from './types.js';
@@ -86,7 +86,7 @@ async function findUserOrThrow(deps: RouteDeps, userId: string): Promise<UserPro
 
 function getProgressSummary(user: UserProfile) {
   const skillStates = Object.values(user.skills);
-  const masteredSkills = skillStates.filter((skill) => skill.mastery >= 0.8).length;
+  const masteredSkills = skillStates.filter((skill) => skill.mastery >= MASTERY_THRESHOLD).length;
   const entitlement = normalizeEntitlement(user.entitlement);
   const features = resolveFeatureAccess(entitlement);
   const completedLessonCount = Object.keys(user.completedLessons ?? {}).length;
@@ -293,7 +293,7 @@ function syncMasteryCompletions(user: UserProfile, nowIso: string): void {
       continue;
     }
 
-    const masteredCount = lessonSkillIds.filter((skillId) => (user.skills[skillId]?.mastery ?? 0) >= 0.8).length;
+    const masteredCount = lessonSkillIds.filter((skillId) => (user.skills[skillId]?.mastery ?? 0) >= MASTERY_THRESHOLD).length;
     if (masteredCount !== lessonSkillIds.length) {
       continue;
     }
@@ -341,6 +341,9 @@ function numericEquivalent(
   let answerValue = answer.value;
   let expectedValue = expected.value;
 
+  // Percent convention: a decimal form is treated as equivalent to a percent form,
+  // so "0.5" and "50" both satisfy an expected "50%". This is intentional leniency
+  // for learners who may enter either representation.
   if (expected.isPercent && !answer.isPercent && answerValue <= 1) {
     answerValue *= 100;
   }
@@ -349,7 +352,12 @@ function numericEquivalent(
     expectedValue *= 100;
   }
 
-  return Math.abs(answerValue - expectedValue) <= 0.01;
+  // Tolerance scales with magnitude so large answers are not rejected for trivial
+  // rounding (a bare 0.01 absolute tolerance is meaningless at, say, $1,200), while
+  // small/integer answers still require a near-exact match. Exact answers already
+  // pass via the string-equality fast path in isAnswerCorrect.
+  const tolerance = Math.max(0.01, Math.abs(expectedValue) * 1e-4);
+  return Math.abs(answerValue - expectedValue) <= tolerance;
 }
 
 function isAnswerCorrect(answer: string, acceptableAnswers: string[]): boolean {
