@@ -111,6 +111,17 @@ function toPurchaseArray(result: Purchase | Purchase[] | null): Purchase[] {
   return Array.isArray(result) ? result : [result];
 }
 
+function purchaseTimestamp(purchase: Purchase): number {
+  // expo-iap surfaces transactionDate as an epoch number on some platforms and an
+  // ISO/date string on others; normalize both to a comparable millisecond value.
+  const value: unknown = (purchase as { transactionDate?: unknown }).transactionDate;
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : 0;
+  }
+  const parsed = Date.parse(String(value));
+  return Number.isNaN(parsed) ? 0 : parsed;
+}
+
 function selectPurchase(purchases: Purchase[], productIds: string[]): Purchase | null {
   const withToken = purchases.filter((purchase) => typeof purchase.purchaseToken === 'string' && purchase.purchaseToken.length > 0);
   if (withToken.length === 0) {
@@ -122,7 +133,7 @@ function selectPurchase(purchases: Purchase[], productIds: string[]): Purchase |
     return exactMatch;
   }
 
-  const sortedByDate = [...withToken].sort((a, b) => b.transactionDate - a.transactionDate);
+  const sortedByDate = [...withToken].sort((a, b) => purchaseTimestamp(b) - purchaseTimestamp(a));
   return sortedByDate[0] ?? null;
 }
 

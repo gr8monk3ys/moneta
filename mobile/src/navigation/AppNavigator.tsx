@@ -33,6 +33,19 @@ function toAuthContext(
   };
 }
 
+// Completing a session can change progress, the daily feed, the path, and any
+// entitlement-derived limits (e.g. free-plan review caps), so invalidate all four.
+function invalidateAfterSession(queryClient: ReturnType<typeof useQueryClient>, userId: string): void {
+  for (const queryKey of [
+    queryKeys.today(userId),
+    queryKeys.progress(userId),
+    queryKeys.learningPath(userId),
+    queryKeys.entitlement(userId)
+  ]) {
+    queryClient.invalidateQueries({ queryKey }).catch(() => undefined);
+  }
+}
+
 function TabBar(props: BottomTabBarProps) {
   const active = props.state.routeNames[props.state.index] as TabKey;
   return (
@@ -135,9 +148,7 @@ function LessonPlayerRoute(props: LessonPlayerRouteProps) {
       auth={authContext}
       onExit={(updated) => {
         if (updated) {
-          queryClient.invalidateQueries({ queryKey: queryKeys.today(userId) }).catch(() => undefined);
-          queryClient.invalidateQueries({ queryKey: queryKeys.progress(userId) }).catch(() => undefined);
-          queryClient.invalidateQueries({ queryKey: queryKeys.learningPath(userId) }).catch(() => undefined);
+          invalidateAfterSession(queryClient, userId);
         }
         props.navigation.goBack();
       }}
@@ -164,9 +175,7 @@ function ReviewPlayerRoute(props: ReviewPlayerRouteProps) {
       auth={authContext}
       onExit={(updated) => {
         if (updated) {
-          queryClient.invalidateQueries({ queryKey: queryKeys.today(userId) }).catch(() => undefined);
-          queryClient.invalidateQueries({ queryKey: queryKeys.progress(userId) }).catch(() => undefined);
-          queryClient.invalidateQueries({ queryKey: queryKeys.learningPath(userId) }).catch(() => undefined);
+          invalidateAfterSession(queryClient, userId);
         }
         props.navigation.goBack();
       }}

@@ -308,6 +308,29 @@ describe('store billing helpers', () => {
     expect(restored).toBeNull();
   });
 
+  it('selects the most recent purchase when transactionDate is an ISO string', async () => {
+    setPlatform('android');
+    process.env.EXPO_PUBLIC_ANDROID_SUBSCRIPTION_PRODUCT_IDS = 'moneta.pro.monthly';
+
+    (expoIap.fetchProducts as jest.Mock).mockResolvedValue([
+      { id: 'moneta.pro.monthly', title: '', displayName: '', description: '', displayPrice: '' }
+    ]);
+    // No exact SKU match -> fall back to most-recent-by-date. The older entry is first,
+    // and dates are ISO strings: they must be parsed, not subtracted, to order correctly.
+    (expoIap.requestPurchase as jest.Mock).mockResolvedValue([
+      { productId: 'older-product', purchaseToken: 'old-token', transactionDate: '2024-01-01T00:00:00.000Z' },
+      { productId: 'newer-product', purchaseToken: 'new-token', transactionDate: '2024-06-01T00:00:00.000Z' }
+    ]);
+
+    const purchase = await purchasePrimarySubscription('user-1');
+    expect(purchase).toEqual({
+      platform: 'android',
+      productId: 'newer-product',
+      purchaseToken: 'new-token',
+      sandbox: false
+    });
+  });
+
   it('throws for missing Android store config and tokenless Google Play purchases', async () => {
     setPlatform('android');
     process.env.EXPO_PUBLIC_BILLING_SANDBOX_MODE = 'false';
