@@ -2,6 +2,8 @@ name: security-baseline
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: "23 8 25 * *"  # monthly (minute-safe policy)
 
 permissions: read-all
 

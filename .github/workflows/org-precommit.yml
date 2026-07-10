@@ -1,12 +1,9 @@
 name: org-precommit
 
 on:
-  push:
-    branches:
-      - main
-  schedule:
-    - cron: '0 8 * * 1'
   workflow_dispatch:
+  schedule:
+    - cron: "23 8 25 * *"  # monthly (minute-safe policy)
 
 permissions: read-all
 
