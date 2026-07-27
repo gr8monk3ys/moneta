@@ -1,16 +1,22 @@
 # Moneta Content Readiness
 
-*Last updated: March 12, 2026*
+*Last updated: July 27, 2026*
 
 This document summarizes whether the current curriculum is usable for real beginner learners and what still needs to happen before broad public launch.
+
+> **Update (2026-07-27):** the premium tier (all 42 F4–F6 lessons) went through a
+> hardening pass — strawman MCQ distractors rewritten as in-domain misconceptions,
+> numeric items upgraded to two-step calculations, and one scenario-framed
+> short-answer item added per authored premium lesson (the scenario format was
+> previously unused). Counts below reflect the live curriculum.
 
 ## Current state
 
 - Total lessons: `84`
-- Total items: `648`
+- Total items: `540`
 - Levels covered: `F1` to `F6`
-- Free lessons: `42`
-- Premium lessons: `42`
+- Free lessons: `42` (all of `F1`–`F3`)
+- Premium lessons: `42` (all of `F4`–`F6`)
 
 Source snapshots:
 
@@ -28,7 +34,7 @@ Why that is true:
 - There is a guided path across foundational through advanced levels instead of a flat content dump.
 - `F1` to `F3` cover beginner-relevant areas such as budgeting, banking, cash flow, credit, debt, savings, and everyday financial decisions.
 - Lessons include explanations, which makes the app usable as a teaching product rather than only a quiz product.
-- The free pathway still covers every finance level, so a first-time user can explore the product before paying.
+- The free pathway fully covers the beginner levels (`F1`–`F3`), so a first-time user can learn productively before paying; `F4`–`F6` are the premium tier.
 - Daily review and progress systems reinforce learning instead of requiring users to remember everything after a single lesson.
 
 ## What is complete
