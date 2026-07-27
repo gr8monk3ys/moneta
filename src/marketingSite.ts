@@ -1,4 +1,13 @@
 import type { Request } from 'express';
+import { lessons } from './data.js';
+
+// Derived from the live curriculum so the landing page can never drift from
+// what the app actually ships.
+const curriculumStats = {
+  lessons: lessons.length,
+  items: lessons.reduce((sum, lesson) => sum + lesson.items.length, 0),
+  levels: new Set(lessons.map((lesson) => lesson.level)).size
+};
 
 interface MarketingLink {
   href: string;
@@ -176,15 +185,15 @@ export function renderMarketingPage(req: Request): string {
             </div>
             <div class="hero-grid">
               <div class="hero-card">
-                <span class="stat">84</span>
+                <span class="stat">${curriculumStats.lessons}</span>
                 <span class="stat-label">lessons in the current curriculum</span>
               </div>
               <div class="hero-card">
-                <span class="stat">648</span>
+                <span class="stat">${curriculumStats.items}</span>
                 <span class="stat-label">learning items already mapped in-repo</span>
               </div>
               <div class="hero-card">
-                <span class="stat">6</span>
+                <span class="stat">${curriculumStats.levels}</span>
                 <span class="stat-label">finance levels from F1 Foundations to F6 Analyst Mode</span>
               </div>
               <div class="hero-card">
