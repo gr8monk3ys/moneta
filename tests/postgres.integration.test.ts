@@ -101,16 +101,15 @@ describe.skipIf(!runIntegration)('Postgres integration', () => {
 
   it('enforces user-resource isolation in postgres mode', async () => {
     await request(app).post('/api/auth/register').send({
-      userId: 'pg-user-a',
       email: 'pg-user-a@example.com',
       password: 'password123'
     });
 
-    await request(app).post('/api/auth/register').send({
-      userId: 'pg-user-b',
+    const registerB = await request(app).post('/api/auth/register').send({
       email: 'pg-user-b@example.com',
       password: 'password123'
     });
+    const userIdB = registerB.body.userId as string;
 
     const loginA = await request(app).post('/api/auth/login').send({
       email: 'pg-user-a@example.com',
@@ -118,18 +117,18 @@ describe.skipIf(!runIntegration)('Postgres integration', () => {
     });
 
     const forbidden = await request(app)
-      .get('/api/progress/pg-user-b')
+      .get(`/api/progress/${userIdB}`)
       .set('Authorization', `Bearer ${loginA.body.accessToken as string}`);
 
     expect(forbidden.status).toBe(403);
   });
 
   it('persists billing entitlement sync outcomes in postgres mode', async () => {
-    await request(app).post('/api/auth/register').send({
-      userId: 'pg-billing-user',
+    const register = await request(app).post('/api/auth/register').send({
       email: 'pg-billing-user@example.com',
       password: 'password123'
     });
+    const userId = register.body.userId as string;
 
     const login = await request(app).post('/api/auth/login').send({
       email: 'pg-billing-user@example.com',
@@ -148,7 +147,7 @@ describe.skipIf(!runIntegration)('Postgres integration', () => {
     expect(sync.status).toBe(200);
 
     const entitlements = await request(app)
-      .get('/api/billing/entitlements/pg-billing-user')
+      .get(`/api/billing/entitlements/${userId}`)
       .set('Authorization', `Bearer ${login.body.accessToken as string}`);
 
     expect(entitlements.status).toBe(200);
@@ -156,15 +155,15 @@ describe.skipIf(!runIntegration)('Postgres integration', () => {
   });
 
   it('handles webhook replay idempotency and persists only one processed event', async () => {
-    await request(app).post('/api/auth/register').send({
-      userId: 'pg-webhook-user',
+    const register = await request(app).post('/api/auth/register').send({
       email: 'pg-webhook-user@example.com',
       password: 'password123'
     });
+    const webhookUserId = register.body.userId as string;
 
     const payload = {
       eventId: 'pg-webhook-event-1',
-      userId: 'pg-webhook-user',
+      userId: webhookUserId,
       platform: 'ios',
       productId: 'moneta.pro.monthly',
       isActive: true,
