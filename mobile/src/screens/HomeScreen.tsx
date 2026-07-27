@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { completeSession, fetchLessonDetails, fetchProgress, fetchToday, refreshSession, submitPlacement, type AuthContext } from '../lib/api';
 import { getLevelMeta } from '../lib/learningMetadata';
 import { queryKeys } from '../lib/queryKeys';
-import { theme } from '../lib/theme';
+import { font, surface, theme } from '../lib/theme';
 
 const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
 
@@ -195,8 +195,13 @@ export function HomeScreen(props: HomeProps) {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.hero}>
+        <View style={styles.heroTopRow}>
+          <Text style={styles.heroEyebrow}>Today</Text>
+          <View style={styles.planPill}>
+            <Text style={styles.planPillText}>{planBadge}</Text>
+          </View>
+        </View>
         <Text style={styles.heroTitle}>Daily Goal: 10 min</Text>
-        <Text style={styles.planBadge}>Plan: {planBadge}</Text>
         <Text style={styles.heroSubtitle}>
           {progress
             ? progress.totalSkills > 0
@@ -237,7 +242,10 @@ export function HomeScreen(props: HomeProps) {
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Streak</Text>
-        <Text style={styles.streak}>🔥 {progress ? String(progress.streakDays) : '—'} days</Text>
+        <View style={styles.streakRow}>
+          <View style={styles.streakCoin} />
+          <Text style={styles.streak}>{progress ? String(progress.streakDays) : '—'} days</Text>
+        </View>
       </View>
 
       <View style={styles.actions}>
@@ -279,19 +287,24 @@ export function HomeScreen(props: HomeProps) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.bg },
   content: { padding: 16, gap: 14 },
-  hero: { backgroundColor: theme.cardElevated, borderRadius: 18, padding: 18, gap: 8 },
-  heroTitle: { color: theme.textPrimary, fontSize: 20, fontWeight: '700' },
-  planBadge: { color: theme.accent, fontWeight: '700' },
-  heroSubtitle: { color: theme.textMuted },
-  card: { backgroundColor: theme.card, borderRadius: 16, padding: 16, gap: 6 },
-  cardTitle: { color: theme.textPrimary, fontWeight: '700' },
+  hero: { ...surface.cardElevated, padding: 18, gap: 8 },
+  heroTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  heroEyebrow: { color: theme.accent, fontSize: 12, fontWeight: '700', letterSpacing: 1.4, textTransform: 'uppercase' },
+  planPill: { backgroundColor: theme.accentSoft, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 3 },
+  planPillText: { color: theme.accent, fontSize: 12, fontWeight: '700' },
+  heroTitle: { fontFamily: font.display, color: theme.textPrimary, fontSize: 24, lineHeight: 29, fontWeight: '700' },
+  heroSubtitle: { color: theme.textSecondary, lineHeight: 20 },
+  card: { ...surface.card, padding: 16, gap: 6 },
+  cardTitle: { fontFamily: font.display, color: theme.textPrimary, fontSize: 17, fontWeight: '700' },
   cardLine: { color: theme.textMuted, lineHeight: 20 },
   limitNote: { color: theme.accent, fontSize: 12, marginTop: 6 },
+  streakRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  streakCoin: { width: 10, height: 10, borderRadius: 5, backgroundColor: theme.success },
   streak: { color: theme.success, fontWeight: '700', fontSize: 18 },
   actions: { gap: 10 },
-  button: { backgroundColor: theme.accent, borderRadius: 12, padding: 12 },
-  buttonText: { textAlign: 'center', color: '#1a1d24', fontWeight: '700' },
-  secondaryButton: { borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#2f3440' },
+  button: surface.buttonPrimary,
+  buttonText: { textAlign: 'center', color: theme.onAccent, fontWeight: '700' },
+  secondaryButton: surface.buttonSecondary,
   secondaryButtonText: { textAlign: 'center', color: theme.textPrimary, fontWeight: '700' },
   status: { color: theme.textMuted, textAlign: 'center' }
 });

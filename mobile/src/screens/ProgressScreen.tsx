@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { fetchProgress, type AuthContext } from '../lib/api';
 import { getLevelMeta } from '../lib/learningMetadata';
 import { queryKeys } from '../lib/queryKeys';
-import { theme } from '../lib/theme';
+import { font, surface, theme } from '../lib/theme';
 
 interface ProgressScreenProps {
   userId: string;
@@ -78,12 +78,12 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.bg, padding: 16, gap: 14 },
   loadingContainer: { flex: 1, backgroundColor: theme.bg, alignItems: 'center', justifyContent: 'center' },
   error: { color: theme.danger, textAlign: 'center' },
-  ringCard: { backgroundColor: theme.cardElevated, borderRadius: 18, padding: 24, alignItems: 'center' },
-  level: { color: theme.accent, fontSize: 40, fontWeight: '800' },
+  ringCard: { ...surface.cardElevated, padding: 24, alignItems: 'center' },
+  level: { fontFamily: font.display, color: theme.accent, fontSize: 38, lineHeight: 46, fontWeight: '700', textAlign: 'center' },
   plan: { color: theme.textPrimary, fontWeight: '700', marginTop: 4 },
-  subtitle: { color: theme.textMuted, marginTop: 6 },
+  subtitle: { color: theme.textSecondary, marginTop: 6, textAlign: 'center', lineHeight: 20 },
   statsRow: { flexDirection: 'row', gap: 10 },
-  stat: { flex: 1, backgroundColor: theme.card, borderRadius: 14, padding: 14, alignItems: 'center' },
-  statValue: { color: theme.textPrimary, fontWeight: '800', fontSize: 18 },
-  statLabel: { color: theme.textMuted, marginTop: 4 }
+  stat: { ...surface.card, flex: 1, padding: 14, alignItems: 'center' },
+  statValue: { fontFamily: font.display, color: theme.textPrimary, fontWeight: '700', fontSize: 20 },
+  statLabel: { color: theme.textMuted, marginTop: 4, fontSize: 12, letterSpacing: 0.4, textTransform: 'uppercase' }
 });

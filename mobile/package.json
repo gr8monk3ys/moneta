@@ -53,6 +53,9 @@
   "overrides": {
     "tar": "7.5.11",
     "qs": "6.14.2",
-    "minimatch": "10.2.4"
+    "minimatch": "10.2.4",
+    "test-exclude": {
+      "minimatch": "^3.1.2"
+    }
   }
 }

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useReducer } from 'react';
 import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { completeSession, fetchLessonDetails, type AuthContext, type LessonDetailsResponse, type SessionItemResult } from '../lib/api';
-import { theme } from '../lib/theme';
+import { font, surface, theme } from '../lib/theme';
 
 interface LessonPlayerProps {
   userId: string;
@@ -299,27 +299,27 @@ const styles = StyleSheet.create({
   center: { flex: 1, backgroundColor: theme.bg, alignItems: 'center', justifyContent: 'center', padding: 16, gap: 10 },
   headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
   progress: { color: theme.textMuted },
-  hero: { backgroundColor: theme.cardElevated, borderRadius: 18, padding: 18, gap: 8 },
-  heroTitle: { color: theme.textPrimary, fontSize: 20, fontWeight: '800' },
-  heroSubtitle: { color: theme.textMuted },
-  card: { backgroundColor: theme.card, borderRadius: 16, padding: 16, gap: 10 },
-  cardTitle: { color: theme.textPrimary, fontWeight: '800' },
+  hero: { ...surface.cardElevated, padding: 18, gap: 8 },
+  heroTitle: { fontFamily: font.display, color: theme.textPrimary, fontSize: 22, lineHeight: 27, fontWeight: '700' },
+  heroSubtitle: { color: theme.textSecondary, lineHeight: 20 },
+  card: { ...surface.card, padding: 16, gap: 10 },
+  cardTitle: { fontFamily: font.display, color: theme.textPrimary, fontSize: 17, fontWeight: '700' },
   prompt: { color: theme.textPrimary, fontSize: 16, lineHeight: 22 },
   choices: { gap: 10 },
-  choice: { borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#2f3440', backgroundColor: theme.cardElevated },
-  choiceSelected: { borderColor: theme.accent, backgroundColor: '#2d2620' },
+  choice: { borderRadius: 12, padding: 12, borderWidth: 1, borderColor: theme.lineStrong, backgroundColor: theme.cardElevated },
+  choiceSelected: { borderColor: theme.accent, backgroundColor: theme.accentSoft },
   choiceText: { color: theme.textPrimary, fontWeight: '700' },
-  choiceTextSelected: { color: theme.accent },
-  input: { backgroundColor: theme.cardElevated, borderRadius: 12, padding: 12, color: theme.textPrimary, borderWidth: 1, borderColor: '#2f3440' },
+  choiceTextSelected: { color: theme.accentBright },
+  input: { ...surface.input, backgroundColor: theme.cardElevated },
   inputMultiline: { minHeight: 110, textAlignVertical: 'top' },
-  explanation: { marginTop: 4, backgroundColor: '#141820', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#243043', gap: 6 },
-  explanationTitle: { color: theme.accent, fontWeight: '800' },
+  explanation: { marginTop: 4, backgroundColor: theme.bg, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: theme.line, gap: 6 },
+  explanationTitle: { color: theme.accent, fontWeight: '700' },
   explanationBody: { color: theme.textMuted },
   navRow: { flexDirection: 'row', gap: 10, justifyContent: 'space-between' },
-  button: { flex: 1, backgroundColor: theme.accent, borderRadius: 12, padding: 12 },
-  buttonText: { textAlign: 'center', color: '#1a1d24', fontWeight: '800' },
-  secondaryButton: { padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#2f3440' },
-  secondaryButtonText: { color: theme.textPrimary, fontWeight: '800', textAlign: 'center' },
+  button: { ...surface.buttonPrimary, flex: 1 },
+  buttonText: { textAlign: 'center', color: theme.onAccent, fontWeight: '700' },
+  secondaryButton: surface.buttonSecondary,
+  secondaryButtonText: { color: theme.textPrimary, fontWeight: '700', textAlign: 'center' },
   disabledButton: { opacity: 0.55 },
   error: { color: theme.danger, textAlign: 'center' },
   reviewItem: { marginTop: 12, gap: 6 },

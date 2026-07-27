@@ -4,7 +4,14 @@
     "slug": "moneta",
     "version": "1.0.0",
     "orientation": "portrait",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
+    "backgroundColor": "#0C1415",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0C1415"
+    },
     "assetBundlePatterns": [
       "**/*"
     ],
@@ -16,10 +23,15 @@
       "bundleIdentifier": "com.moneta.app"
     },
     "android": {
-      "package": "com.moneta.app"
+      "package": "com.moneta.app",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0C1415"
+      }
     },
     "web": {
-      "bundler": "metro"
+      "bundler": "metro",
+      "favicon": "./assets/favicon.png"
     }
   }
 }
