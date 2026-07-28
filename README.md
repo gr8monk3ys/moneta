@@ -1,5 +1,9 @@
 # moneta
 
+<p align="center">
+  <img src="docs/assets/hero.png" alt="moneta preview" width="640">
+</p>
+
 An iOS / Android finance-learning platform.
 
 ## Product documentation
