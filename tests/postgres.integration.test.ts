@@ -125,11 +125,21 @@ describe.skipIf(!runIntegration)('Postgres integration', () => {
   });
 
   it('persists billing entitlement sync outcomes in postgres mode', async () => {
-    await request(app).post('/api/auth/register').send({
-      userId: 'pg-billing-user',
+    // The id must come from the response. /api/auth/register generates it
+    // with crypto.randomUUID() and ignores any client-supplied userId — a
+    // client that could choose its own id could impersonate an existing
+    // account. Passing `userId: 'pg-billing-user'` here therefore did NOT
+    // name the created user, so the request below carried a token whose
+    // `sub` was some random UUID while the path said 'pg-billing-user', and
+    // ensureSelfAccess correctly answered 403.
+    const register = await request(app).post('/api/auth/register').send({
       email: 'pg-billing-user@example.com',
       password: 'password123'
     });
+
+    expect(register.status).toBe(201);
+    const userId = register.body.userId as string;
+    expect(userId).toBeTruthy();
 
     const login = await request(app).post('/api/auth/login').send({
       email: 'pg-billing-user@example.com',
@@ -148,7 +158,7 @@ describe.skipIf(!runIntegration)('Postgres integration', () => {
     expect(sync.status).toBe(200);
 
     const entitlements = await request(app)
-      .get('/api/billing/entitlements/pg-billing-user')
+      .get(`/api/billing/entitlements/${userId}`)
       .set('Authorization', `Bearer ${login.body.accessToken as string}`);
 
     expect(entitlements.status).toBe(200);
@@ -156,15 +166,21 @@ describe.skipIf(!runIntegration)('Postgres integration', () => {
   });
 
   it('handles webhook replay idempotency and persists only one processed event', async () => {
-    await request(app).post('/api/auth/register').send({
-      userId: 'pg-webhook-user',
+    // Same as above: take the generated id. The webhook names its subject by
+    // userId, and 'pg-webhook-user' was never a real user, so
+    // findUserOrThrow answered 404 before idempotency was ever exercised.
+    const register = await request(app).post('/api/auth/register').send({
       email: 'pg-webhook-user@example.com',
       password: 'password123'
     });
 
+    expect(register.status).toBe(201);
+    const userId = register.body.userId as string;
+    expect(userId).toBeTruthy();
+
     const payload = {
       eventId: 'pg-webhook-event-1',
-      userId: 'pg-webhook-user',
+      userId,
       platform: 'ios',
       productId: 'moneta.pro.monthly',
       isActive: true,
