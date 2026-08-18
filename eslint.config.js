@@ -3,7 +3,7 @@ import tsPlugin from '@typescript-eslint/eslint-plugin';
 
 /** @type {import('eslint').Linter.FlatConfig[]} */
 export default [
-  { ignores: ['coverage/**', 'mobile/coverage/**', 'dist/**'] },
+  { ignores: ['coverage/**', 'mobile/coverage/**', 'dist/**', '.remember/**'] },
   {
     files: ['**/*.ts'],
     ignores: ['mobile/**'],
