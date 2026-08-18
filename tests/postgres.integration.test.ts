@@ -101,16 +101,17 @@ describe.skipIf(!runIntegration)('Postgres integration', () => {
 
   it('enforces user-resource isolation in postgres mode', async () => {
     await request(app).post('/api/auth/register').send({
-      userId: 'pg-user-a',
       email: 'pg-user-a@example.com',
       password: 'password123'
     });
 
-    await request(app).post('/api/auth/register').send({
-      userId: 'pg-user-b',
+    // Target a real user's id — a 403 against a made-up id would only prove
+    // the id doesn't exist, not that isolation is enforced.
+    const registerB = await request(app).post('/api/auth/register').send({
       email: 'pg-user-b@example.com',
       password: 'password123'
     });
+    const userIdB = registerB.body.userId as string;
 
     const loginA = await request(app).post('/api/auth/login').send({
       email: 'pg-user-a@example.com',
@@ -118,7 +119,7 @@ describe.skipIf(!runIntegration)('Postgres integration', () => {
     });
 
     const forbidden = await request(app)
-      .get('/api/progress/pg-user-b')
+      .get(`/api/progress/${userIdB}`)
       .set('Authorization', `Bearer ${loginA.body.accessToken as string}`);
 
     expect(forbidden.status).toBe(403);

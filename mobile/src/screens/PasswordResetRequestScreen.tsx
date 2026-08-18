@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { requestPasswordReset } from '../lib/api';
-import { theme } from '../lib/theme';
+import { font, surface, theme } from '../lib/theme';
 import type { AuthStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'PasswordResetRequest'>;
@@ -72,19 +72,12 @@ export function PasswordResetRequestScreen(props: Props) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.bg, padding: 24, justifyContent: 'center', gap: 12 },
   backLink: { color: theme.textMuted, textDecorationLine: 'underline', marginBottom: 8 },
-  title: { color: theme.textPrimary, fontSize: 24, fontWeight: '700' },
-  subtitle: { color: theme.textMuted, marginBottom: 12 },
+  title: { fontFamily: font.display, color: theme.textPrimary, fontSize: 26, fontWeight: '700' },
+  subtitle: { color: theme.textSecondary, marginBottom: 12, lineHeight: 20 },
   label: { color: theme.textPrimary, fontWeight: '600' },
-  input: {
-    backgroundColor: theme.card,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#2f3440',
-    color: theme.textPrimary,
-    padding: 12
-  },
+  input: surface.input,
   error: { color: theme.danger },
   status: { color: theme.textMuted },
-  primaryButton: { backgroundColor: theme.accent, borderRadius: 12, padding: 14, marginTop: 8 },
-  primaryText: { textAlign: 'center', color: '#1a1d24', fontWeight: '700' }
+  primaryButton: { ...surface.buttonPrimary, marginTop: 8 },
+  primaryText: { textAlign: 'center', color: theme.onAccent, fontWeight: '700' }
 });

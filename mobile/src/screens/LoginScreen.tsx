@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { BrandLockup } from '../components/BrandMark';
 import { login, register } from '../lib/api';
 import { openLegalDoc, type LegalDocKey } from '../lib/legal';
-import { theme } from '../lib/theme';
+import { font, surface, theme } from '../lib/theme';
 
 interface AuthResult {
   accessToken: string;
@@ -63,7 +64,7 @@ export function LoginScreen(props: { onAuthenticated: (auth: AuthResult) => void
 
   return (
     <View style={styles.container}>
-      <Text style={styles.logo}>💰 Moneta</Text>
+      <BrandLockup tagline="Finance learning for real life" />
       <Text style={styles.title}>Build money confidence in 5-minute lessons</Text>
       <Text style={styles.subtitle}>Start free and learn the habits behind better day-to-day financial decisions.</Text>
 
@@ -129,22 +130,14 @@ export function LoginScreen(props: { onAuthenticated: (auth: AuthResult) => void
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.bg, padding: 24, justifyContent: 'center', gap: 12 },
-  logo: { color: theme.accent, fontSize: 28, fontWeight: '700' },
-  title: { color: theme.textPrimary, fontSize: 24, fontWeight: '700' },
-  subtitle: { color: theme.textMuted, marginBottom: 12 },
+  title: { fontFamily: font.display, color: theme.textPrimary, fontSize: 26, lineHeight: 31, fontWeight: '700', marginTop: 8 },
+  subtitle: { color: theme.textSecondary, marginBottom: 12, lineHeight: 20 },
   label: { color: theme.textPrimary, fontWeight: '600' },
-  input: {
-    backgroundColor: theme.card,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#2f3440',
-    color: theme.textPrimary,
-    padding: 12
-  },
+  input: surface.input,
   error: { color: theme.danger },
-  primaryButton: { backgroundColor: theme.accent, borderRadius: 12, padding: 14, marginTop: 8 },
-  primaryText: { textAlign: 'center', color: '#1a1d24', fontWeight: '700' },
-  secondaryButton: { borderRadius: 12, padding: 14, borderWidth: 1, borderColor: '#2f3440' },
+  primaryButton: { ...surface.buttonPrimary, marginTop: 8 },
+  primaryText: { textAlign: 'center', color: theme.onAccent, fontWeight: '700' },
+  secondaryButton: surface.buttonSecondary,
   secondaryText: { textAlign: 'center', color: theme.textPrimary, fontWeight: '600' },
   forgotLink: { color: theme.textMuted, textAlign: 'center', textDecorationLine: 'underline' },
   legalRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 6 },

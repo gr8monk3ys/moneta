@@ -15,6 +15,18 @@ learning loop.
 > carry `provisional` editorial status and still warrant **finance-SME sign-off**
 > before being marketed as financial education/advice.
 
+> **Status update (2026-07-27) — premium tier hardened.** A follow-up audit of the
+> authored premium tier found residual strawman distractors (19 filler strings
+> reused 3+ times, "your credit score" appearing 14× as a wrong option),
+> single-step numerics (33 of 35), and zero scenario-format items. All 36 authored
+> F4–F6 lessons were reworked: every weak distractor rewritten as an in-domain
+> misconception (sibling concepts, reversed relationships, plausible-but-wrong
+> rules), numerics upgraded to two-step calculations, and one scenario-framed
+> short-answer item appended per lesson (36 new items; curriculum now 84 lessons /
+> 540 items). Structural invariants (choice integrity, distractor-reuse cap ≤2 per
+> level, scenario answer shape) are script-verified. **Finance-SME sign-off of
+> F4–F6 remains the open gate** — editorial status is still `provisional`.
+
 ## TL;DR
 
 The catalog shows **84 lessons**, but they're two very different tiers:

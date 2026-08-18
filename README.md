@@ -37,7 +37,7 @@ An iOS / Android finance-learning platform.
 ## Repository layout
 
 - `src/` - backend API
-- `src/content/curriculum.generated.json` - externalized curriculum content source
+- `src/content/curriculum.seed.ts` + `src/content/curriculum.authored.ts` - hand-authored curriculum content source
 - `mobile/` - Expo mobile app (iOS/Android/Web)
 - `public/marketing/` - static landing-page assets served from `/`
 

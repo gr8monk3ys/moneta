@@ -15,7 +15,7 @@ import {
 import { queryKeys } from '../lib/queryKeys';
 import { openLegalDoc, type LegalDocKey } from '../lib/legal';
 import { disconnectStoreBilling, restoreLatestSubscription } from '../lib/storeBilling';
-import { theme } from '../lib/theme';
+import { font, radius, surface, theme } from '../lib/theme';
 
 interface ProfileProps {
   onLogout: () => void;
@@ -257,29 +257,29 @@ export function ProfileScreen(props: ProfileProps) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.bg },
   content: { padding: 16, paddingBottom: 32, gap: 12 },
-  name: { color: theme.textPrimary, fontSize: 20, fontWeight: '700' },
-  description: { color: theme.textMuted },
+  name: { fontFamily: font.display, color: theme.textPrimary, fontSize: 24, fontWeight: '700' },
+  description: { color: theme.textSecondary, lineHeight: 20 },
   memberId: { color: theme.textMuted, fontSize: 12 },
   plan: { color: theme.accent, fontWeight: '600' },
   section: { gap: 10, paddingTop: 6 },
-  sectionTitle: { color: theme.textPrimary, fontWeight: '700' },
-  button: { backgroundColor: theme.card, borderColor: '#2f3440', borderWidth: 1, borderRadius: 12, padding: 12 },
+  sectionTitle: { fontFamily: font.display, color: theme.textPrimary, fontSize: 17, fontWeight: '700' },
+  button: { ...surface.buttonSecondary, backgroundColor: theme.card },
   buttonText: { color: theme.textPrimary, textAlign: 'center', fontWeight: '700' },
-  secondaryButton: { borderColor: theme.accent, borderWidth: 1, borderRadius: 12, padding: 12 },
+  secondaryButton: { ...surface.buttonSecondary, borderColor: theme.accent },
   secondaryText: { color: theme.accent, textAlign: 'center', fontWeight: '700' },
-  dangerButton: { borderColor: theme.danger, borderWidth: 1, borderRadius: 12, padding: 12 },
+  dangerButton: { ...surface.buttonSecondary, borderColor: theme.danger },
   dangerText: { color: theme.danger, textAlign: 'center', fontWeight: '700' },
-  message: { textAlign: 'center' },
+  message: { textAlign: 'center', color: theme.textMuted },
   successMessage: { color: theme.success },
   errorMessage: { color: theme.danger },
   disclaimer: { color: theme.textMuted, textAlign: 'center', fontSize: 12 },
-  modalBackdrop: { flex: 1, backgroundColor: 'rgba(7, 9, 13, 0.7)', alignItems: 'center', justifyContent: 'center', padding: 20 },
-  modalCard: { width: '100%', maxWidth: 420, backgroundColor: theme.card, borderRadius: 18, padding: 18, gap: 12, borderWidth: 1, borderColor: '#2f3440' },
-  modalTitle: { color: theme.textPrimary, fontSize: 18, fontWeight: '700' },
-  modalBody: { color: theme.textMuted, lineHeight: 20 },
+  modalBackdrop: { flex: 1, backgroundColor: theme.overlay, alignItems: 'center', justifyContent: 'center', padding: 20 },
+  modalCard: { ...surface.cardElevated, width: '100%', maxWidth: 420, padding: 18, gap: 12 },
+  modalTitle: { fontFamily: font.display, color: theme.textPrimary, fontSize: 19, fontWeight: '700' },
+  modalBody: { color: theme.textSecondary, lineHeight: 20 },
   modalActions: { gap: 10 },
-  modalDangerButton: { backgroundColor: theme.danger, borderRadius: 12, padding: 12 },
-  modalDangerText: { color: '#1a1d24', textAlign: 'center', fontWeight: '700' },
-  paywallSecondaryButton: { borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#2f3440' },
+  modalDangerButton: { backgroundColor: theme.danger, borderRadius: radius.pill, padding: 13 },
+  modalDangerText: { color: theme.onAccent, textAlign: 'center', fontWeight: '700' },
+  paywallSecondaryButton: surface.buttonSecondary,
   paywallSecondaryText: { color: theme.textPrimary, textAlign: 'center', fontWeight: '700' }
 });

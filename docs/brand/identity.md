@@ -1,6 +1,6 @@
 # Moneta Brand Identity
 
-*Last updated: March 12, 2026*
+*Last updated: July 27, 2026*
 
 ## Core idea
 
@@ -70,6 +70,27 @@ The display stack gives Moneta a more deliberate, editorial feel than a default 
 
 - Primary asset: [`moneta-mark.svg`](../../public/marketing/moneta-mark.svg)
 - Meaning: a stepped growth form inside a coin-like frame
+- App store / launcher assets: `mobile/assets/` (icon, adaptive icon, splash, favicon), regenerated from the mark geometry with [`scripts/generate-mobile-assets.cjs`](../../scripts/generate-mobile-assets.cjs)
+
+## In-app design tokens
+
+The mobile app implements this identity through a token system in
+[`mobile/src/lib/theme.ts`](../../mobile/src/lib/theme.ts):
+
+- `palette` — the brand colors above plus derived dark surfaces
+  (`tealSurface #122123`, `tealRaised #193135`) that match the marketing
+  site's card gradients, and a warm coral (`#E4726B`) for destructive states.
+- `theme` — semantic roles (`bg`, `card`, `textPrimary`, `accent`,
+  `onAccent`, `success`, `danger`, soft tints, hairline borders).
+- `font` — the display serif / interface sans stacks; Iowan Old Style and
+  Avenir Next ship with iOS, Android falls back to its system faces.
+- `surface` — shared card, capsule-button, and input shapes so screens stay
+  consistent.
+
+The in-app brand mark is rebuilt from plain views in
+[`mobile/src/components/BrandMark.tsx`](../../mobile/src/components/BrandMark.tsx)
+(no SVG dependency), and the tab bar uses coin-dot indicators instead of
+emoji, per the guidance below.
 
 ## Messaging pillars
 
@@ -94,6 +115,6 @@ The product is explicitly education-only and avoids advisory or hype-driven fram
 
 ## In-product guidance
 
-- Replace emoji-heavy branding with the Moneta mark or neutral interface cues where practical.
+- Replace emoji-heavy branding with the Moneta mark or neutral interface cues where practical. *(Implemented: login lockup, tab bar, and streak display now use the mark and coin motifs.)*
 - Keep subscription language direct and factual.
-- Use warm contrast, not neon fintech aesthetics.
+- Use warm contrast, not neon fintech aesthetics. *(Implemented: the app runs on the Ledger Ink / Signal Teal / Brass palette via `theme.ts`.)*
