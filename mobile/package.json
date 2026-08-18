@@ -51,9 +51,10 @@
     "typescript": "^5.9.3"
   },
   "overrides": {
-    "tar": "7.5.11",
+    "tar": "7.5.22",
     "qs": "6.14.2",
     "minimatch": "10.2.4",
+    "postcss": "^8.5.26",
     "test-exclude": {
       "minimatch": "^3.1.2"
     }

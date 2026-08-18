@@ -105,6 +105,8 @@ describe.skipIf(!runIntegration)('Postgres integration', () => {
       password: 'password123'
     });
 
+    // Target a real user's id — a 403 against a made-up id would only prove
+    // the id doesn't exist, not that isolation is enforced.
     const registerB = await request(app).post('/api/auth/register').send({
       email: 'pg-user-b@example.com',
       password: 'password123'
@@ -124,11 +126,21 @@ describe.skipIf(!runIntegration)('Postgres integration', () => {
   });
 
   it('persists billing entitlement sync outcomes in postgres mode', async () => {
+    // The id must come from the response. /api/auth/register generates it
+    // with crypto.randomUUID() and ignores any client-supplied userId — a
+    // client that could choose its own id could impersonate an existing
+    // account. Passing `userId: 'pg-billing-user'` here therefore did NOT
+    // name the created user, so the request below carried a token whose
+    // `sub` was some random UUID while the path said 'pg-billing-user', and
+    // ensureSelfAccess correctly answered 403.
     const register = await request(app).post('/api/auth/register').send({
       email: 'pg-billing-user@example.com',
       password: 'password123'
     });
+
+    expect(register.status).toBe(201);
     const userId = register.body.userId as string;
+    expect(userId).toBeTruthy();
 
     const login = await request(app).post('/api/auth/login').send({
       email: 'pg-billing-user@example.com',
@@ -155,15 +167,21 @@ describe.skipIf(!runIntegration)('Postgres integration', () => {
   });
 
   it('handles webhook replay idempotency and persists only one processed event', async () => {
+    // Same as above: take the generated id. The webhook names its subject by
+    // userId, and 'pg-webhook-user' was never a real user, so
+    // findUserOrThrow answered 404 before idempotency was ever exercised.
     const register = await request(app).post('/api/auth/register').send({
       email: 'pg-webhook-user@example.com',
       password: 'password123'
     });
-    const webhookUserId = register.body.userId as string;
+
+    expect(register.status).toBe(201);
+    const userId = register.body.userId as string;
+    expect(userId).toBeTruthy();
 
     const payload = {
       eventId: 'pg-webhook-event-1',
-      userId: webhookUserId,
+      userId,
       platform: 'ios',
       productId: 'moneta.pro.monthly',
       isActive: true,
