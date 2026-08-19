@@ -4,3 +4,8 @@ coverage/
 artifacts/
 .env
 mobile/.env
+.vercel
+.env*
+.agents/
+.claude/skills/neon*
+skills-lock.json

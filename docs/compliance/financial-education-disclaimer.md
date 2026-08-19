@@ -1,6 +1,6 @@
 # Moneta Financial Education Disclaimer
 
-Effective date: `To be set at publication`
+Effective date: 2026-08-18
 
 This is a launch draft based on the current Moneta product. Legal counsel should review and finalize it before publication.
 
@@ -44,4 +44,4 @@ Paid subscriptions unlock app features only. They do not change the educational-
 
 ## 9. Contact
 
-Support contact: `<set published support contact before launch>`
+Support contact: lorenzosca7@protonmail.ch

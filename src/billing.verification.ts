@@ -72,6 +72,7 @@ export interface BillingVerifier {
 interface BillingVerifierOptions {
   nodeEnv: string;
   allowSandboxTokens: boolean;
+  subscriptionsDisabled?: boolean;
   webhookSecret?: string;
   appleSharedSecret?: string;
   appleProductionVerifyUrl?: string;
@@ -502,12 +503,22 @@ export function createBillingVerifier(options: BillingVerifierOptions): BillingV
     throw new Error('BILLING_WEBHOOK_SECRET must be configured in production');
   }
 
-  if (options.nodeEnv === 'production' && !hasAppleConfig && !hasGoogleConfig) {
-    throw new Error('At least one billing provider verifier (Apple or Google Play) must be configured in production');
+  // SUBSCRIPTIONS=disabled is a deliberate launch posture: purchase
+  // verification reports itself unavailable instead of requiring provider
+  // credentials that don't exist yet. The webhook secret stays mandatory so
+  // that endpoint remains locked, and sandbox tokens stay dead either way.
+  if (options.nodeEnv === 'production' && !options.subscriptionsDisabled && !hasAppleConfig && !hasGoogleConfig) {
+    throw new Error(
+      'At least one billing provider verifier (Apple or Google Play) must be configured in production (or set SUBSCRIPTIONS=disabled to launch without purchases)'
+    );
   }
 
   return {
     async verifyPurchase(input: VerifyPurchaseInput): Promise<VerifiedPurchase> {
+      if (options.subscriptionsDisabled) {
+        throw new ApiError(503, 'Subscriptions are not available yet.');
+      }
+
       const now = input.now ?? new Date();
 
       if (input.platform === 'ios') {

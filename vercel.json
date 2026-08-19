@@ -1,0 +1,14 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/api/index" }
+  ],
+  "functions": {
+    "api/index.ts": {
+      "includeFiles": "{migrations,public}/**"
+    }
+  },
+  "crons": [
+    { "path": "/internal/prune-refresh-tokens", "schedule": "0 6 * * *" }
+  ]
+}

@@ -1,6 +1,6 @@
 # Moneta Subscription Terms
 
-Effective date: `To be set at publication`
+Effective date: 2026-08-18
 
 This is a launch draft based on the current Moneta subscription model. Legal counsel should review and finalize it before publication.
 
@@ -61,4 +61,4 @@ Subscriptions unlock app features only. They do not change the educational-only 
 
 ## 11. Contact
 
-Support contact: `<set published support contact before launch>`
+Support contact: lorenzosca7@protonmail.ch

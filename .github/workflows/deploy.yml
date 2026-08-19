@@ -2,11 +2,11 @@ permissions: read-all
 
 name: Deploy
 
+# Manual-only since production moved to Vercel (git-integration deploys on
+# push to main, outside Actions). This SSH/systemd pipeline is kept intact for
+# a future self-hosted target; dispatch it by hand if that day comes.
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
 
 concurrency:
   group: moneta-production-deploy

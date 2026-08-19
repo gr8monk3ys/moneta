@@ -1,10 +1,8 @@
 name: Deploy Staging
 
+# Manual-only since production moved to Vercel (previews cover staging).
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - work
 
 concurrency:
   group: moneta-staging-deploy

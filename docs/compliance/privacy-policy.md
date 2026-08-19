@@ -1,6 +1,6 @@
 # Moneta Privacy Policy
 
-Effective date: `To be set at publication`
+Effective date: 2026-08-18
 
 This is a launch draft based on the current Moneta product and codebase. Legal counsel should review and finalize it before publication.
 
@@ -83,6 +83,6 @@ Moneta may update this Privacy Policy from time to time. Material changes should
 
 ## 11. Contact
 
-Privacy contact: `<set published privacy contact before launch>`
+Privacy contact: lorenzosca7@protonmail.ch
 
-Controller / operator: `<set legal entity name and address before launch>`
+Controller / operator: Lorenzo Scaturchio, operating as an individual

@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import { ApiError } from './errors.js';
 import { logInfo } from './logger.js';
 
 export interface EmailService {
@@ -15,7 +16,19 @@ export function createEmailService(options: { nodeEnv: string }): EmailService {
 
   if (!isNonEmptyString(host)) {
     if (nodeEnv === 'production') {
-      throw new Error('SMTP_HOST must be set in production to enable password reset emails');
+      // EMAIL_DELIVERY=disabled is a deliberate launch posture, not a default:
+      // the app ships, and password reset alone reports itself unavailable
+      // until SMTP credentials land. Anything else stays a boot failure.
+      if (process.env.EMAIL_DELIVERY?.trim().toLowerCase() === 'disabled') {
+        logInfo({ message: 'EMAIL_DELIVERY=disabled: password reset emails are unavailable until SMTP is configured' });
+        return {
+          sendPasswordResetCode: async () => {
+            throw new ApiError(503, 'Password reset email is not available yet. Contact support.');
+          }
+        };
+      }
+
+      throw new Error('SMTP_HOST must be set in production to enable password reset emails (or set EMAIL_DELIVERY=disabled to launch without it)');
     }
 
     return {
