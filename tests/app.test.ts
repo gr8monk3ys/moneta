@@ -1518,6 +1518,27 @@ describe('Moneta API auth + learning flow', () => {
     const sitemap = await request(app).get('/sitemap.xml').set('Host', 'moneta.test');
     expect(sitemap.status).toBe(200);
     expect(sitemap.text).toContain('<loc>http://moneta.test/</loc>');
+    expect(sitemap.text).toContain('<loc>http://moneta.test/legal/privacy-policy</loc>');
+  });
+
+  it('serves the published legal pages and 404s unknown slugs', async () => {
+    const { app } = buildApp();
+
+    const privacy = await request(app).get('/legal/privacy-policy');
+    expect(privacy.status).toBe(200);
+    expect(privacy.headers['content-type']).toContain('text/html');
+    expect(privacy.text).toContain('Privacy Policy');
+    expect(privacy.text).toContain('Lorenzo Scaturchio');
+
+    const terms = await request(app).get('/legal/terms-of-service');
+    expect(terms.status).toBe(200);
+    expect(terms.text).toContain('lorenzosca7@protonmail.ch');
+
+    const unknown = await request(app).get('/legal/not-a-policy');
+    expect(unknown.status).toBe(404);
+
+    const traversal = await request(app).get('/legal/..%2F..%2Fpackage.json');
+    expect(traversal.status).toBe(404);
   });
 
   it('injects configured launch links into the landing page', async () => {

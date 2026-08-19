@@ -52,10 +52,10 @@ Positioning notes:
 
 ## Support + policy URLs
 
-- Support URL: `<https://...>`
-- Marketing URL: `<https://...>`
-- Privacy Policy URL: `<https://...>`
-- Terms of Service URL: `<https://...>`
+- Support URL: https://moneta-opal-alpha.vercel.app
+- Marketing URL: https://moneta-opal-alpha.vercel.app
+- Privacy Policy URL: https://moneta-opal-alpha.vercel.app/legal/privacy-policy
+- Terms of Service URL: https://moneta-opal-alpha.vercel.app/legal/terms-of-service
 
 Launch note:
 

@@ -76,11 +76,20 @@ export function renderRobotsTxt(req: Request): string {
 
 export function renderSitemapXml(req: Request): string {
   const baseUrl = resolveBaseUrl(req);
+  const legalUrls = [
+    'privacy-policy',
+    'terms-of-service',
+    'subscription-terms',
+    'financial-education-disclaimer',
+    'account-data-deletion-policy'
+  ].map((slug) => `  <url>\n    <loc>${baseUrl}/legal/${slug}</loc>\n  </url>`).join('\n');
+
   return `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>${baseUrl}/</loc>
   </url>
+${legalUrls}
 </urlset>
 `;
 }

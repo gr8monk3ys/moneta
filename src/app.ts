@@ -7,6 +7,7 @@ import { createBillingVerifier, type BillingVerifier } from './billing.verificat
 import type { EmailService } from './email.js';
 import { ApiError } from './errors.js';
 import { requestLogger, type RequestLoggerRequest } from './logger.js';
+import { isLegalSlug, renderLegalPage } from './legalPages.js';
 import { renderMarketingPage, renderRobotsTxt, renderSitemapXml } from './marketingSite.js';
 import { metricsMiddleware } from './metrics.js';
 import { errorHandler } from './middleware/errorHandler.js';
@@ -118,6 +119,21 @@ export function createApp(options: AppOptions): express.Express {
 
   app.get('/sitemap.xml', (req, res) => {
     res.type('application/xml').send(renderSitemapXml(req));
+  });
+
+  app.get('/legal/:slug', (req, res, next) => {
+    const slug = req.params.slug;
+    if (!isLegalSlug(slug)) {
+      next(new ApiError(404, 'Not found'));
+      return;
+    }
+
+    renderLegalPage(slug)
+      .then((page) => {
+        res.setHeader('cache-control', 'public, max-age=3600');
+        res.type('html').send(page);
+      })
+      .catch(next);
   });
 
   registerSystemRoutes(app, deps);
