@@ -88,7 +88,7 @@ Ensure the final in-app purchase copy clearly states:
 
 Use the following as the baseline reviewer note:
 
-- Backend base URL: `<https://...>`
+- Backend base URL: https://moneta-opal-alpha.vercel.app
 - Test account email: `<...>`
 - Test account password: `<...>`
 - Notes:
