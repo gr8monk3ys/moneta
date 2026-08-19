@@ -1,6 +1,6 @@
 # Moneta Terms of Service
 
-Effective date: `To be set at publication`
+Effective date: 2026-08-18
 
 This is a launch draft based on the current Moneta product. Legal counsel should review and finalize it before publication.
 
@@ -86,5 +86,5 @@ Users may stop using the service at any time and may request account deletion th
 
 ## 12. Contact
 
-- Support contact: `<set published support contact before launch>`
-- Legal entity and address: `<set legal entity name and address before launch>`
+- Support contact: lorenzosca7@protonmail.ch
+- Legal entity and address: Lorenzo Scaturchio, operating as an individual
