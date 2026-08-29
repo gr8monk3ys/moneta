@@ -1,9 +1,27 @@
-const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env;
-const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
-const baseUrl = env?.EXPO_PUBLIC_API_BASE_URL ?? (isDev ? 'http://localhost:3000' : '');
+import { readPublicEnv } from './env';
 
-if (!baseUrl) {
-  throw new Error('EXPO_PUBLIC_API_BASE_URL is required for non-dev builds.');
+const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
+const baseUrl = readPublicEnv('EXPO_PUBLIC_API_BASE_URL')?.trim() || (isDev ? 'http://localhost:3000' : '');
+
+export const MISSING_API_BASE_URL_MESSAGE = 'EXPO_PUBLIC_API_BASE_URL is required for non-dev builds.';
+
+/**
+ * Deliberately not thrown at module scope. This module is imported by App.tsx,
+ * so a throw here happens before React ever mounts — the error boundary cannot
+ * catch it and the user is left staring at a blank screen. Callers surface the
+ * problem instead: App renders the configuration screen, and any request that
+ * slips through fails with this message rather than a bare fetch to "/api/...".
+ */
+export function getApiConfigError(): string | null {
+  return baseUrl ? null : MISSING_API_BASE_URL_MESSAGE;
+}
+
+function requireBaseUrl(): string {
+  if (!baseUrl) {
+    throw new Error(MISSING_API_BASE_URL_MESSAGE);
+  }
+
+  return baseUrl;
 }
 
 interface AuthPayload {
@@ -228,7 +246,7 @@ function normalizeRequestError(error: unknown): Error {
 async function postJson<T>(path: string, payload: unknown, token?: string): Promise<T> {
   let response: Response;
   try {
-    response = await fetch(`${baseUrl}${path}`, {
+    response = await fetch(`${requireBaseUrl()}${path}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -250,7 +268,7 @@ async function postJson<T>(path: string, payload: unknown, token?: string): Prom
 async function deleteJson<T>(path: string, payload: unknown, token?: string): Promise<T> {
   let response: Response;
   try {
-    response = await fetch(`${baseUrl}${path}`, {
+    response = await fetch(`${requireBaseUrl()}${path}`, {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json',
@@ -272,7 +290,7 @@ async function deleteJson<T>(path: string, payload: unknown, token?: string): Pr
 async function getJson<T>(path: string, token?: string): Promise<T> {
   let response: Response;
   try {
-    response = await fetch(`${baseUrl}${path}`, {
+    response = await fetch(`${requireBaseUrl()}${path}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : undefined
     });
   } catch (error) {
