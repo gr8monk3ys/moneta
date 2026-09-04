@@ -9,6 +9,9 @@ import { AuthNavigator } from './src/navigation/AuthNavigator';
 import { AppNavigator } from './src/navigation/AppNavigator';
 import { queryClient } from './src/lib/queryClient';
 import { AuthProvider, useAuth } from './src/providers/AuthProvider';
+import { ErrorBoundary } from './src/components/ErrorBoundary';
+import { ConfigErrorScreen } from './src/screens/ConfigErrorScreen';
+import { getMissingRequiredSettings } from './src/lib/env';
 import { theme } from './src/lib/theme';
 function RootNavigator() {
   const auth = useAuth();
@@ -29,17 +32,28 @@ function RootNavigator() {
 }
 
 export default function App() {
+  // Checked here rather than at module scope: a throw during module evaluation
+  // happens before React mounts, so it cannot reach the error boundary and the
+  // app renders as a blank screen with the reason only in the console.
+  const missingSettings = getMissingRequiredSettings();
+
   return (
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <SafeAreaProvider>
-          <SafeAreaView style={styles.root}>
-            <StatusBar style="light" />
-            <RootNavigator />
-          </SafeAreaView>
-        </SafeAreaProvider>
-      </AuthProvider>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <SafeAreaProvider>
+        <SafeAreaView style={styles.root}>
+          <StatusBar style="light" />
+          {missingSettings.length > 0 ? (
+            <ConfigErrorScreen missing={missingSettings} />
+          ) : (
+            <QueryClientProvider client={queryClient}>
+              <AuthProvider>
+                <RootNavigator />
+              </AuthProvider>
+            </QueryClientProvider>
+          )}
+        </SafeAreaView>
+      </SafeAreaProvider>
+    </ErrorBoundary>
   );
 }
 

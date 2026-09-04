@@ -1,6 +1,9 @@
 import type { ProductSubscription, Purchase } from 'expo-iap';
 import { Platform } from 'react-native';
+import { readPublicEnv } from './env';
 
+// Non-EXPO_PUBLIC vars are runtime-only (never inlined into a bundle), so the
+// dynamic lookup is correct for these two.
 const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env;
 const DEFAULT_PRO_PRODUCT_ID = 'moneta.pro.monthly';
 
@@ -32,8 +35,8 @@ function parseSkuList(value: string | undefined): string[] {
 
 function getSkuList(platform: BillingPlatform): string[] {
   return platform === 'ios'
-    ? parseSkuList(env?.EXPO_PUBLIC_IOS_SUBSCRIPTION_PRODUCT_IDS)
-    : parseSkuList(env?.EXPO_PUBLIC_ANDROID_SUBSCRIPTION_PRODUCT_IDS);
+    ? parseSkuList(readPublicEnv('EXPO_PUBLIC_IOS_SUBSCRIPTION_PRODUCT_IDS'))
+    : parseSkuList(readPublicEnv('EXPO_PUBLIC_ANDROID_SUBSCRIPTION_PRODUCT_IDS'));
 }
 
 function resolvePlatform(): BillingPlatform {
@@ -53,7 +56,7 @@ function resolveDefaultSku(platform: BillingPlatform): string {
 }
 
 function sandboxEnabled(): boolean {
-  const configured = env?.EXPO_PUBLIC_BILLING_SANDBOX_MODE;
+  const configured = readPublicEnv('EXPO_PUBLIC_BILLING_SANDBOX_MODE');
   if (configured === 'true') {
     return true;
   }
