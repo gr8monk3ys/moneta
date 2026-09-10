@@ -478,11 +478,18 @@ describe('mobile api auth retry', () => {
     await expect(fetchLessonDetails('lesson-1', auth)).rejects.toThrow('Request failed');
   });
 
-  it('requires an API base URL outside development builds', () => {
+  it('reports a missing API base URL instead of throwing while the module loads', async () => {
     jest.resetModules();
     devGlobal.__DEV__ = false;
     delete process.env.EXPO_PUBLIC_API_BASE_URL;
 
-    expect(() => require('../src/lib/api')).toThrow('EXPO_PUBLIC_API_BASE_URL is required for non-dev builds.');
+    // Importing must not throw: this module is loaded from App.tsx, and a
+    // module-scope throw kills the app before React can render anything.
+    const api = require('../src/lib/api') as typeof import('../src/lib/api');
+    expect(api.getApiConfigError()).toBe('EXPO_PUBLIC_API_BASE_URL is required for non-dev builds.');
+
+    await expect(api.login({ email: 'u1@example.com', password: 'password123' })).rejects.toThrow(
+      'EXPO_PUBLIC_API_BASE_URL is required for non-dev builds.'
+    );
   });
 });

@@ -1,6 +1,6 @@
 import { Linking } from 'react-native';
+import { readPublicEnv } from './env';
 
-const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env;
 const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
 
 export type LegalDocKey = 'privacy' | 'terms' | 'subscription' | 'deletion' | 'disclaimer';
@@ -8,15 +8,15 @@ export type LegalDocKey = 'privacy' | 'terms' | 'subscription' | 'deletion' | 'd
 function readUrl(key: LegalDocKey): string | undefined {
   switch (key) {
     case 'privacy':
-      return env?.EXPO_PUBLIC_PRIVACY_POLICY_URL;
+      return readPublicEnv('EXPO_PUBLIC_PRIVACY_POLICY_URL');
     case 'terms':
-      return env?.EXPO_PUBLIC_TERMS_OF_SERVICE_URL;
+      return readPublicEnv('EXPO_PUBLIC_TERMS_OF_SERVICE_URL');
     case 'subscription':
-      return env?.EXPO_PUBLIC_SUBSCRIPTION_TERMS_URL;
+      return readPublicEnv('EXPO_PUBLIC_SUBSCRIPTION_TERMS_URL');
     case 'deletion':
-      return env?.EXPO_PUBLIC_ACCOUNT_DELETION_POLICY_URL;
+      return readPublicEnv('EXPO_PUBLIC_ACCOUNT_DELETION_POLICY_URL');
     case 'disclaimer':
-      return env?.EXPO_PUBLIC_FINANCIAL_DISCLAIMER_URL;
+      return readPublicEnv('EXPO_PUBLIC_FINANCIAL_DISCLAIMER_URL');
     default: {
       const exhaustive: never = key;
       void exhaustive;

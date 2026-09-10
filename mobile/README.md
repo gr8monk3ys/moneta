@@ -30,6 +30,41 @@ Set `EXPO_PUBLIC_API_BASE_URL` to your backend URL. The app logs a runtime warni
 
 For Expo web preview, browser requests must also be allowed by the backend `CORS_ORIGINS` setting.
 
+### How env vars actually reach the bundle
+
+`babel-preset-expo` rewrites the literal expression `process.env.EXPO_PUBLIC_*`
+into a virtual module that Metro fills with the value present **at build time**.
+Two consequences worth knowing before debugging a "the variable isn't taking"
+report:
+
+- Read the variables through `src/lib/env.ts`. Reading `process.env` through an
+  alias (`const env = globalThis.process?.env`) is invisible to that transform,
+  so the value never lands in the bundle and every lookup returns `undefined` at
+  runtime no matter what you exported on the command line.
+- Metro caches the transformed module *including the inlined value*. After
+  changing a variable, pass `--clear` or you will keep bundling the old value.
+
+If a required variable is missing, the app renders a configuration screen naming
+it — it does not crash to a blank page.
+
+## Reviewing the app in a browser
+
+The web export renders every screen, so the UI can be inspected without a
+simulator or device:
+
+```bash
+cd mobile
+npm install
+EXPO_PUBLIC_API_BASE_URL=https://api.example.com npx expo export --platform web --clear --output-dir dist
+npx serve -s dist -l 4501
+# open http://localhost:4501
+```
+
+Screens behind sign-in need a reachable backend (`EXPO_PUBLIC_API_BASE_URL`
+pointing at a running API with this origin in `CORS_ORIGINS`); the auth screens
+render without one. Drop the variable from that command to see the
+configuration screen instead.
+
 ## EAS builds (required for IAP testing)
 
 In-app purchases do not work in Expo Go. Use EAS to build a dev client or an internal distribution build.
