@@ -37,7 +37,7 @@
 | Security | Configure billing provider credentials in production | BLOCKER | Production secret values and provider setup not yet verified live |
 | Runtime | Required production env vars set | BLOCKER | External deploy environment responsibility |
 | Runtime | `CORS_ORIGINS` explicit allowlist | BLOCKER | Must be verified in real production env |
-| Runtime | Run billing readiness check on real release env | BLOCKER | Workflow step added in `.github/workflows/deploy.yml`; first production run evidence pending |
+| Runtime | Run billing readiness check on real release env | BLOCKER | Workflow step was added in the (since removed) `.github/workflows/deploy.yml`; production now deploys via Vercel, evidence pending |
 | Data safety | Migrations clean on production-like snapshot | BLOCKER | Snapshot drill evidence still pending |
 | Data safety | Backup/restore drill validated | BLOCKER | Evidence still pending |
 | Data safety | Rollback procedure validated | BLOCKER | Evidence still pending |
