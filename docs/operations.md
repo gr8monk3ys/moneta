@@ -5,10 +5,9 @@
 - Postgres integration tests run against a workflow service container.
 
 ## Deploy and rollback
-- `.github/workflows/deploy.yml` runs production preflight checks, performs deployment, and validates health checks.
-- `.github/workflows/deploy-staging.yml` deploys the staging environment (branch `work` by default) with a staging-specific preflight.
-- If deploy fails health checks, rollback job runs automatically.
-- Deployment logic is defined in `scripts/deploy.sh`.
+- Production deploys through the Vercel Git integration on push to `main`; there is no production deploy workflow in Actions.
+- `.github/workflows/deploy-staging.yml` (manual `workflow_dispatch`) deploys a self-hosted staging environment with a staging-specific preflight.
+- Deployment logic for the self-hosted path is defined in `scripts/deploy.sh`.
 - Rollback logic is defined in `scripts/rollback.sh`.
 - Configure `DEPLOY_KNOWN_HOSTS` as a repository secret to enforce SSH host-key verification during deploy and rollback.
 - Deployments are versioned under `<DEPLOY_PATH>/releases/<RELEASE_ID>` and switched atomically with symlinks:

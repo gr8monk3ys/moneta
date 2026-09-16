@@ -77,7 +77,16 @@ if [[ "${MOBILE_AUDIT_LEVEL}" == "off" ]]; then
   echo "== Mobile security audit =="
   echo "Skipping: MOBILE_AUDIT_LEVEL=off"
 else
-  run_step "Mobile security audit (${MOBILE_AUDIT_LEVEL})" npm audit --audit-level="${MOBILE_AUDIT_LEVEL}"
+  # Use the allowlist-aware gate, the same one `mobile-quality` runs, rather
+  # than a bare `npm audit`. They disagreed: a bare audit fails on advisories
+  # that have NO fixed release anywhere in the ecosystem -- image-size reaches
+  # us through metro and every published version is vulnerable -- so this step
+  # could never pass while mobile-quality was correctly green. It went
+  # unnoticed because this job `needs: mobile-quality`, which was itself red
+  # for months, so final-gate was SKIPPED in every run on main rather than
+  # failing where anyone could see it. Two gates auditing the same tree must
+  # apply the same policy, or the stricter one is just a permanent red.
+  run_step "Mobile security audit (allowlist-aware)" node scripts/audit-gate.mjs
 fi
 popd >/dev/null
 

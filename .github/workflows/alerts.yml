@@ -4,7 +4,7 @@ name: Failure Alert
 
 on:
   workflow_run:
-    workflows: ["CI", "Deploy", "Deploy Staging"]
+    workflows: ["CI", "Deploy Staging"]
     types: [completed]
 
 concurrency:

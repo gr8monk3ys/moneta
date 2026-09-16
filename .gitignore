@@ -9,3 +9,4 @@ mobile/.env
 .agents/
 .claude/skills/neon*
 skills-lock.json
+.expo/
