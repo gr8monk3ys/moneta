@@ -79,4 +79,3 @@ if [[ "$CORS_ORIGINS" == *"*"* ]]; then
 fi
 
 echo "Staging readiness environment checks passed."
-

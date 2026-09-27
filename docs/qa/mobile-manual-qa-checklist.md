@@ -71,4 +71,3 @@ Use `docs/store-billing-qa-matrix-template.md` as the evidence matrix.
 - [ ] Terms of Service link is present and opens correctly.
 - [ ] Subscription Terms link is present and opens correctly.
 - [ ] Financial education disclaimer is accessible in-app.
-

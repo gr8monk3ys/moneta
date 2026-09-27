@@ -33,4 +33,3 @@ This report records the editorial/SME-style pass executed for the expanded curri
 - Run an external domain SME spot-check (tax, insurance, retirement) prior to public launch.
 - Add per-lesson “sources” links (CFPB/IRS/SEC/SSA/etc.) and keep a documented update cadence for time-sensitive topics.
 - Consider adding additional distractor quality rules (avoid obviously-wrong generic distractors) for premium-grade experience.
-

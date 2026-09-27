@@ -76,4 +76,3 @@ jobs:
           DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
           DEPLOY_SERVICE_NAME: ${{ secrets.DEPLOY_SERVICE_NAME }}
         run: ./scripts/rollback.sh
-

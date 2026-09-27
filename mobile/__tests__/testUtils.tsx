@@ -33,4 +33,3 @@ export function renderWithQueryClient(
   const result = render(ui, { ...options, wrapper: Wrapper });
   return { ...result, queryClient };
 }
-
