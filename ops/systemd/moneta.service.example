@@ -27,4 +27,3 @@ Group=moneta
 
 [Install]
 WantedBy=multi-user.target
-

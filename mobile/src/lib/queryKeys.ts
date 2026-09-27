@@ -5,4 +5,3 @@ export const queryKeys = {
   lesson: (lessonId: string) => ['lesson', lessonId] as const,
   entitlement: (userId: string) => ['entitlement', userId] as const
 };
-
