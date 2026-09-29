@@ -138,3 +138,44 @@ export function markSessionActivity(profile: UserProfile, options: SessionActivi
   const timeZone = options.timeZone ?? 'UTC';
   return updateStreak(profile, now, timeZone);
 }
+
+export type StreakRepairFailureReason = 'no_activity' | 'not_broken' | 'too_many_missed_days';
+
+export type StreakRepairResult =
+  | { repaired: true; streakDays: number }
+  | { repaired: false; reason: StreakRepairFailureReason };
+
+/**
+ * Repair a streak broken by exactly one missed day (the premium "streak repair"
+ * perk). Rather than adding new persisted state, this pulls `lastActiveDate`
+ * forward to "yesterday" so the next `markSessionActivity` call sees a 1-day gap
+ * and continues the streak instead of resetting it. `streakDays` itself is left
+ * untouched: a repair preserves the count, it does not grant an extra day.
+ *
+ * Repair only covers a single missed day, matching the streak-break rule in
+ * `updateStreak` (any gap greater than one day resets the streak). Once repaired,
+ * the streak is no longer broken, so a repeat call for the same break correctly
+ * reports `not_broken` without needing separate usage-limit state.
+ */
+export function repairStreak(profile: UserProfile, options: SessionActivityOptions = {}): StreakRepairResult {
+  if (!profile.lastActiveDate) {
+    return { repaired: false, reason: 'no_activity' };
+  }
+
+  const now = options.now ?? new Date();
+  const timeZone = options.timeZone ?? 'UTC';
+  const today = dayKeyInTimeZone(now, timeZone);
+  const gap = dayDifference(today, profile.lastActiveDate);
+
+  if (gap <= 1) {
+    return { repaired: false, reason: 'not_broken' };
+  }
+
+  if (gap > 2) {
+    return { repaired: false, reason: 'too_many_missed_days' };
+  }
+
+  profile.lastActiveDate = dayKeyInTimeZone(new Date(now.getTime() - 24 * 60 * 60 * 1000), timeZone);
+
+  return { repaired: true, streakDays: profile.streakDays };
+}

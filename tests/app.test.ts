@@ -471,6 +471,126 @@ describe('Moneta API auth + learning flow', () => {
     expect(nextToday.body.nextLesson?.lessonId).not.toBe(initialLessonId);
   });
 
+  it('requires Pro entitlement to repair a streak', async () => {
+    const { app, accessToken, userId } = await buildAuthedApp();
+
+    const denied = await request(app)
+      .post(`/api/progress/${userId}/streak/repair`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({});
+
+    expect(denied.status).toBe(402);
+  });
+
+  it('lets a Pro user repair a streak broken by exactly one missed day', async () => {
+    const { repository, app } = buildApp();
+
+    await request(app).post('/api/auth/register').send({ email: 'streak@example.com', password: 'password123' });
+    const login = await request(app).post('/api/auth/login').send({ email: 'streak@example.com', password: 'password123' });
+    const accessToken = login.body.accessToken as string;
+    const userId = login.body.userId as string;
+
+    await request(app)
+      .post('/api/billing/entitlements/sync')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        platform: 'ios',
+        productId: 'moneta.pro.monthly',
+        purchaseToken: 'sandbox-premium-unlock-12345'
+      });
+
+    const notBrokenYet = await request(app)
+      .post(`/api/progress/${userId}/streak/repair`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({});
+    expect(notBrokenYet.status).toBe(409);
+
+    // Simulate a user who was active two days ago (a single missed day since) by
+    // writing directly to the repository, the same state `sessions/complete`
+    // would have left behind.
+    const user = await repository.getUserProfile(userId);
+    if (!user) throw new Error('expected seeded user profile');
+    const twoDaysAgo = new Date();
+    twoDaysAgo.setUTCDate(twoDaysAgo.getUTCDate() - 2);
+    user.streakDays = 6;
+    user.lastActiveDate = twoDaysAgo.toISOString().slice(0, 10);
+    await repository.upsertUserProfile(user);
+
+    const repaired = await request(app)
+      .post(`/api/progress/${userId}/streak/repair`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ timeZone: 'UTC' });
+
+    expect(repaired.status).toBe(200);
+    expect(repaired.body.streakDays).toBe(6);
+
+    // A repeat repair attempt for the same break is refused (no separate
+    // usage-limit state is needed: the streak is simply no longer broken).
+    const repeatRepair = await request(app)
+      .post(`/api/progress/${userId}/streak/repair`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ timeZone: 'UTC' });
+    expect(repeatRepair.status).toBe(409);
+
+    // Completing today's session continues the streak instead of resetting it.
+    const today = await request(app)
+      .get(`/api/learn/today/${userId}`)
+      .set('Authorization', `Bearer ${accessToken}`);
+    const lessonId = String(today.body.nextLesson.lessonId);
+    const lessonResponse = await request(app)
+      .get(`/api/learn/lessons/${lessonId}`)
+      .set('Authorization', `Bearer ${accessToken}`);
+    const skillIds = [...new Set(
+      lessonResponse.body.lesson.items.map((item: { skillId: string }) => item.skillId)
+    )];
+
+    const completion = await request(app)
+      .post('/api/sessions/complete')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ timeZone: 'UTC', itemResults: skillIds.map((skillId) => ({ skillId, isCorrect: true })) });
+
+    expect(completion.status).toBe(200);
+    expect(completion.body.streakDays).toBe(7);
+  });
+
+  it('rejects repairing a streak that has no activity yet or is broken by more than one day', async () => {
+    const { repository, app } = buildApp();
+
+    await request(app).post('/api/auth/register').send({ email: 'streak-lapsed@example.com', password: 'password123' });
+    const login = await request(app).post('/api/auth/login').send({ email: 'streak-lapsed@example.com', password: 'password123' });
+    const accessToken = login.body.accessToken as string;
+    const userId = login.body.userId as string;
+
+    await request(app)
+      .post('/api/billing/entitlements/sync')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        platform: 'ios',
+        productId: 'moneta.pro.monthly',
+        purchaseToken: 'sandbox-premium-unlock-12345'
+      });
+
+    const neverActive = await request(app)
+      .post(`/api/progress/${userId}/streak/repair`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({});
+    expect(neverActive.status).toBe(409);
+
+    const user = await repository.getUserProfile(userId);
+    if (!user) throw new Error('expected seeded user profile');
+    const fourDaysAgo = new Date();
+    fourDaysAgo.setUTCDate(fourDaysAgo.getUTCDate() - 4);
+    user.streakDays = 3;
+    user.lastActiveDate = fourDaysAgo.toISOString().slice(0, 10);
+    await repository.upsertUserProfile(user);
+
+    const tooManyMissedDays = await request(app)
+      .post(`/api/progress/${userId}/streak/repair`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ timeZone: 'UTC' });
+    expect(tooManyMissedDays.status).toBe(409);
+  });
+
   it('grades lesson answers server-side when provided', async () => {
     const { app, accessToken } = await buildAuthedApp();
 
