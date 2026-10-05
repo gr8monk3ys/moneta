@@ -11,5 +11,11 @@
   },
   "crons": [
     { "path": "/internal/prune-refresh-tokens", "schedule": "0 6 * * *" }
-  ]
+  ],
+  "git": {
+    "deploymentEnabled": {
+      "dependabot/**": false,
+      "release-please--**": false
+    }
+  }
 }
