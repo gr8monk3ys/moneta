@@ -90,6 +90,7 @@ This repository includes a TypeScript backend for the core loop with authenticat
 - curriculum path and lesson detail (`GET /api/learn/path/:userId`, `GET /api/learn/lessons/:lessonId`)
 - session completion with mastery/streak updates (`POST /api/sessions/complete`)
 - progress summary (`GET /api/progress/:userId`)
+- streak repair, Pro-only, for a single missed day (`POST /api/progress/:userId/streak/repair`)
 - billing entitlement read/sync (`GET /api/billing/entitlements/:userId`, `POST /api/billing/entitlements/sync`)
 - health/readiness/metrics (`GET /health`, `GET /ready`, `GET /metrics`)
 
