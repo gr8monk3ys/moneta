@@ -14,6 +14,22 @@ const ALLOWLIST = {
   // fixed release exists.
   'GHSA-w3rx-r6r6-pgpr': 'image-size ICNS DoS — no fixed release, build-time only',
   'GHSA-5p2g-fcmc-qvqq': 'image-size JXL/HEIF DoS — no fixed release, build-time only',
+  // braces stack-exhaustion DoS on deeply nested brace patterns. Every
+  // published version (<= 3.0.3, the latest) is vulnerable and the advisory
+  // lists no patched release as of 2026-10-12. It reaches us only through
+  // micromatch in the jest/metro dev toolchain, which expands glob patterns
+  // written in this repo's own config — never attacker-supplied input, and
+  // never shipped in the app bundle. Remove when upstream ships a fixed
+  // braces release.
+  'GHSA-vfj7-8cjw-p6xm': 'braces nested-pattern DoS — no fixed release, dev toolchain only',
+  // node-forge RSA PKCS#1 v1.5 signature verification accepts extra nested
+  // DigestAlgorithm elements. Every published version (<= 1.4.0, the latest)
+  // is vulnerable and the advisory lists no patched release as of 2026-10-12.
+  // It reaches us only through @expo/cli (and its
+  // @expo/code-signing-certificates), i.e. the local dev/build CLI — it is
+  // not bundled into the app. Remove when upstream ships a fixed node-forge
+  // release.
+  'GHSA-86w9-cpqp-85rv': 'node-forge RSA signature verification — no fixed release, dev toolchain only',
 };
 
 const res = spawnSync('npm', ['audit', '--json'], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
