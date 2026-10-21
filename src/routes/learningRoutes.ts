@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { authenticateJwt, type AuthenticatedRequest } from '../auth.js';
 import { normalizeEntitlement, resolveFeatureAccess } from '../billing.js';
 import { getKnownSkillIds, getLessonById, getNextLessonForLevel, getNextLessonForProgress, isLessonCompleted, listCurriculum } from '../data.js';
-import { applyItemResult, higherLevel, isValidTimeZone, markSessionActivity, MASTERY_THRESHOLD, placeUser } from '../engine.js';
+import { applyItemResult, higherLevel, isValidTimeZone, markSessionActivity, MASTERY_THRESHOLD, placeUser, repairStreak, type StreakRepairFailureReason } from '../engine.js';
 import { ApiError } from '../errors.js';
 import type { ReviewItem, UserProfile } from '../types.js';
 import type { RouteDeps } from './types.js';
@@ -655,6 +655,38 @@ export function registerLearningRoutes(app: express.Express, deps: RouteDeps): v
       ensureSelfAccess(req, userId);
       const user = await findUserOrThrow(deps, userId);
       res.status(200).json(getProgressSummary(user));
+    }).catch(next);
+  });
+
+  app.post('/api/progress/:userId/streak/repair', authenticateJwt(deps.jwtSecret), (req: AuthenticatedRequest, res, next: NextFunction) => {
+    Promise.resolve().then(async () => {
+      const { userId } = validateParams(req.params);
+      ensureSelfAccess(req, userId);
+      const user = await findUserOrThrow(deps, userId);
+      const entitlement = normalizeEntitlement(user.entitlement);
+      const features = resolveFeatureAccess(entitlement);
+
+      if (!features.streakRepair) {
+        throw new ApiError(402, 'Pro subscription required for streak repair');
+      }
+
+      const timeZone = resolveTimeZone(
+        typeof req.body?.timeZone === 'string' ? req.body.timeZone : undefined,
+        req.header('x-user-timezone')
+      );
+      const result = repairStreak(user, { timeZone });
+
+      if (!result.repaired) {
+        const messages: Record<StreakRepairFailureReason, string> = {
+          no_activity: 'No streak activity to repair',
+          not_broken: 'Streak is not currently broken',
+          too_many_missed_days: 'Streak repair only covers a single missed day'
+        };
+        throw new ApiError(409, messages[result.reason]);
+      }
+
+      await deps.repository.upsertUserProfile(user);
+      res.status(200).json({ userId, streakDays: result.streakDays, lastActiveDate: user.lastActiveDate });
     }).catch(next);
   });
 

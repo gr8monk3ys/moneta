@@ -98,6 +98,13 @@ Returns level, streak, and mastery summary. `:userId` must match token subject.
 - Includes `plan` and `premiumActive` status.
 - Includes lesson progression summary (`completedLessons`, `totalLessons`).
 
+### `POST /api/progress/:userId/streak/repair`
+Repairs a streak that was broken by exactly one missed day (Pro-only). `:userId` must match token subject.
+- Optional body field: `timeZone` (IANA timezone) to compute streak day boundaries; falls back to the `x-user-timezone` header, then UTC.
+- Returns `402` when the user does not have the `streakRepair` feature (free plan).
+- Returns `409` when there is no streak to repair, the streak is not currently broken, or more than one day was missed (repair only covers a single missed day).
+- On success, returns `{ userId, streakDays, lastActiveDate }`; `streakDays` is preserved, not incremented. A repeat call for the same break correctly returns `409` since the streak is no longer broken.
+
 ### `GET /api/billing/entitlements/:userId`
 Returns current subscription entitlement and feature access for the authenticated user. `:userId` must match token subject.
 
