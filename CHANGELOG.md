@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/gr8monk3ys/moneta/compare/v1.0.0...v1.1.0) (2026-10-21)
+
+
+### Features
+
+* add Pro streak repair endpoint ([#91](https://github.com/gr8monk3ys/moneta/issues/91)) ([bfadb61](https://github.com/gr8monk3ys/moneta/commit/bfadb61f7c45a6e8066c06f161ab48f9e18f4a3a))
+
 ## 1.0.0 (2026-10-13)
 
 
