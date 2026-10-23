@@ -97,6 +97,7 @@ Stores item outcomes, updates streak, and schedules review items.
 Returns level, streak, and mastery summary. `:userId` must match token subject.
 - Includes `plan` and `premiumActive` status.
 - Includes lesson progression summary (`completedLessons`, `totalLessons`).
+- Includes `streakRepairAvailable`: `true` only when the user has the `streakRepair` feature and `POST /api/progress/:userId/streak/repair` would succeed right now. Day boundaries use the optional `timeZone` query parameter, then the `x-user-timezone` header, then UTC.
 
 ### `POST /api/progress/:userId/streak/repair`
 Repairs a streak that was broken by exactly one missed day (Pro-only). `:userId` must match token subject.

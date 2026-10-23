@@ -1,6 +1,7 @@
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
-import { useQuery } from '@tanstack/react-query';
-import { fetchProgress, type AuthContext } from '../lib/api';
+import { useState } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { fetchProgress, repairStreak, type AuthContext } from '../lib/api';
 import { getLevelMeta } from '../lib/learningMetadata';
 import { queryKeys } from '../lib/queryKeys';
 import { font, surface, theme } from '../lib/theme';
@@ -22,11 +23,36 @@ function formatError(error: unknown): string {
   return error instanceof Error ? error.message : 'Unknown error';
 }
 
+function getTimeZone(): string {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone;
+}
+
 export function ProgressScreen(props: ProgressScreenProps) {
+  const queryClient = useQueryClient();
+  const [repairing, setRepairing] = useState(false);
+  const [repairStatus, setRepairStatus] = useState<string | null>(null);
   const progressQuery = useQuery({
     queryKey: queryKeys.progress(props.userId),
-    queryFn: () => fetchProgress(props.userId, props.auth)
+    queryFn: () => fetchProgress(props.userId, props.auth, getTimeZone())
   });
+
+  async function handleRepairStreak() {
+    setRepairing(true);
+    setRepairStatus(null);
+
+    try {
+      const result = await repairStreak(props.userId, props.auth, getTimeZone());
+      setRepairStatus(`Streak repaired: ${result.streakDays} days. Finish a session today to keep it going.`);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.progress(props.userId) }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.today(props.userId) })
+      ]);
+    } catch (error) {
+      setRepairStatus(formatError(error));
+    } finally {
+      setRepairing(false);
+    }
+  }
 
   if (progressQuery.isPending) {
     return (
@@ -70,6 +96,21 @@ export function ProgressScreen(props: ProgressScreenProps) {
         <View style={styles.stat}><Text style={styles.statValue}>{viewModel.mastery}</Text><Text style={styles.statLabel}>Mastery</Text></View>
         <View style={styles.stat}><Text style={styles.statValue}>{viewModel.streak}</Text><Text style={styles.statLabel}>Streak</Text></View>
       </View>
+      {progress.streakRepairAvailable ? (
+        <View style={styles.repairCard}>
+          <Text style={styles.repairText}>You missed a day. As a Pro member, you can repair a streak broken by a single missed day.</Text>
+          <Pressable
+            style={styles.button}
+            onPress={handleRepairStreak}
+            disabled={repairing}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: repairing }}
+          >
+            <Text style={styles.buttonText}>{repairing ? 'Repairing...' : 'Repair Streak'}</Text>
+          </Pressable>
+        </View>
+      ) : null}
+      {repairStatus ? <Text style={styles.status}>{repairStatus}</Text> : null}
     </View>
   );
 }
@@ -85,5 +126,10 @@ const styles = StyleSheet.create({
   statsRow: { flexDirection: 'row', gap: 10 },
   stat: { ...surface.card, flex: 1, padding: 14, alignItems: 'center' },
   statValue: { fontFamily: font.display, color: theme.textPrimary, fontWeight: '700', fontSize: 20 },
-  statLabel: { color: theme.textMuted, marginTop: 4, fontSize: 12, letterSpacing: 0.4, textTransform: 'uppercase' }
+  statLabel: { color: theme.textMuted, marginTop: 4, fontSize: 12, letterSpacing: 0.4, textTransform: 'uppercase' },
+  repairCard: { ...surface.card, padding: 16, gap: 10 },
+  repairText: { color: theme.textSecondary, lineHeight: 20, textAlign: 'center' },
+  button: surface.buttonPrimary,
+  buttonText: { textAlign: 'center', color: theme.onAccent, fontWeight: '700' },
+  status: { color: theme.textMuted, textAlign: 'center' }
 });
