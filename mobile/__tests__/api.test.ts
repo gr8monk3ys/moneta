@@ -14,6 +14,7 @@ import {
   probeBackend,
   refresh,
   register,
+  repairStreak,
   requestPasswordReset,
   syncEntitlement,
   submitPlacement,
@@ -325,6 +326,44 @@ describe('mobile api auth retry', () => {
     await expect(fetchToday('user-1', auth)).rejects.toThrow('Service unavailable');
 
     expect(fetchSpy).toHaveBeenCalled();
+  });
+
+  it('sends the learner time zone with progress reads and streak repairs', async () => {
+    const fetchSpy = jest.spyOn(globalThis, 'fetch').mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/api/progress/user-1')) {
+        return {
+          ok: true,
+          json: async () => ({ userId: 'user-1', streakDays: 4, streakRepairAvailable: true })
+        } as Response;
+      }
+      if (url.endsWith('/api/progress/user-1/streak/repair')) {
+        return {
+          ok: true,
+          json: async () => ({ userId: 'user-1', streakDays: 4, lastActiveDate: '2026-03-09' })
+        } as Response;
+      }
+      throw new Error(`Unhandled request: ${url}`);
+    });
+
+    const auth: AuthContext = {
+      accessToken: 'access-token',
+      refreshToken: 'refresh-token',
+      onTokensUpdated: jest.fn()
+    };
+
+    const progress = await fetchProgress('user-1', auth, 'America/New_York');
+    expect(progress.streakRepairAvailable).toBe(true);
+    expect(fetchSpy).toHaveBeenLastCalledWith(
+      expect.stringContaining('/api/progress/user-1'),
+      { headers: { Authorization: 'Bearer access-token', 'x-user-timezone': 'America/New_York' } }
+    );
+
+    const repaired = await repairStreak('user-1', auth, 'America/New_York');
+    expect(repaired.streakDays).toBe(4);
+    const repairInit = fetchSpy.mock.calls.at(-1)?.[1];
+    expect(repairInit?.method).toBe('POST');
+    expect(JSON.parse(String(repairInit?.body))).toEqual({ timeZone: 'America/New_York' });
   });
 
   it('normalizes network request failures into a user-facing message', async () => {

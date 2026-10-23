@@ -84,13 +84,17 @@ async function findUserOrThrow(deps: RouteDeps, userId: string): Promise<UserPro
   return user;
 }
 
-function getProgressSummary(user: UserProfile) {
+function getProgressSummary(user: UserProfile, options: { timeZone?: string; now?: Date } = {}) {
   const skillStates = Object.values(user.skills);
   const masteredSkills = skillStates.filter((skill) => skill.mastery >= MASTERY_THRESHOLD).length;
   const entitlement = normalizeEntitlement(user.entitlement);
   const features = resolveFeatureAccess(entitlement);
   const completedLessonCount = Object.keys(user.completedLessons ?? {}).length;
   const totalLessons = listCurriculum(true).length;
+  // Dry-run the repair against a copy so clients can offer the action only when it
+  // would succeed; repairStreak mutates lastActiveDate on the profile it is given.
+  const streakRepairAvailable = features.streakRepair
+    && repairStreak({ ...user }, { timeZone: options.timeZone, now: options.now }).repaired;
 
   return {
     userId: user.userId,
@@ -101,7 +105,8 @@ function getProgressSummary(user: UserProfile) {
     plan: entitlement.plan,
     premiumActive: features.unlimitedReviews,
     completedLessons: completedLessonCount,
-    totalLessons
+    totalLessons,
+    streakRepairAvailable
   };
 }
 
@@ -654,7 +659,11 @@ export function registerLearningRoutes(app: express.Express, deps: RouteDeps): v
       const { userId } = validateParams(req.params);
       ensureSelfAccess(req, userId);
       const user = await findUserOrThrow(deps, userId);
-      res.status(200).json(getProgressSummary(user));
+      const timeZone = resolveTimeZone(
+        typeof req.query.timeZone === 'string' ? req.query.timeZone : undefined,
+        req.header('x-user-timezone')
+      );
+      res.status(200).json(getProgressSummary(user, { timeZone }));
     }).catch(next);
   });
 
