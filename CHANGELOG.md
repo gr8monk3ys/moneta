@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.1.0](https://github.com/gr8monk3ys/moneta/compare/v1.0.0...v1.1.0) (2026-11-02)
+
+
+### Features
+
+* add Pro streak repair endpoint ([#91](https://github.com/gr8monk3ys/moneta/issues/91)) ([bfadb61](https://github.com/gr8monk3ys/moneta/commit/bfadb61f7c45a6e8066c06f161ab48f9e18f4a3a))
+* streak repair in the mobile app ([#101](https://github.com/gr8monk3ys/moneta/issues/101)) ([3c8fe10](https://github.com/gr8monk3ys/moneta/commit/3c8fe10dabbe0edead078a831cf16ab793425529))
+
+
+### Bug Fixes
+
+* **deps:** clear audit failures blocking CI (root and mobile) ([#109](https://github.com/gr8monk3ys/moneta/issues/109)) ([10be340](https://github.com/gr8monk3ys/moneta/commit/10be34090d6b354f0ba279673ba99b0437f08833))
+* **deps:** clear audit failures on main (root and mobile lockfiles) ([10be340](https://github.com/gr8monk3ys/moneta/commit/10be34090d6b354f0ba279673ba99b0437f08833))
+
 ## 1.0.0 (2026-10-13)
 
 
