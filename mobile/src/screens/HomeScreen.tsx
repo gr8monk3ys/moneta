@@ -39,7 +39,7 @@ export function HomeScreen(props: HomeProps) {
 
   const progressQuery = useQuery({
     queryKey: queryKeys.progress(props.userId),
-    queryFn: () => fetchProgress(props.userId, props.auth)
+    queryFn: () => fetchProgress(props.userId, props.auth, Intl.DateTimeFormat().resolvedOptions().timeZone)
   });
 
   const todayQuery = useQuery({

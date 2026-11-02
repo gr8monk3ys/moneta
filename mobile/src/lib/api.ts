@@ -77,6 +77,13 @@ export interface ProgressResponse {
   premiumActive: boolean;
   completedLessons?: number;
   totalLessons?: number;
+  streakRepairAvailable?: boolean;
+}
+
+export interface StreakRepairResponse {
+  userId: string;
+  streakDays: number;
+  lastActiveDate?: string;
 }
 
 export interface TodayReviewItem {
@@ -287,11 +294,15 @@ async function deleteJson<T>(path: string, payload: unknown, token?: string): Pr
   return response.json() as Promise<T>;
 }
 
-async function getJson<T>(path: string, token?: string): Promise<T> {
+async function getJson<T>(path: string, token?: string, extraHeaders?: Record<string, string>): Promise<T> {
+  const headers = {
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...extraHeaders
+  };
   let response: Response;
   try {
     response = await fetch(`${requireBaseUrl()}${path}`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined
+      headers: Object.keys(headers).length > 0 ? headers : undefined
     });
   } catch (error) {
     throw normalizeRequestError(error);
@@ -431,8 +442,18 @@ export async function deleteAccount(auth: AuthContext): Promise<{ userId: string
   ));
 }
 
-export async function fetchProgress(userId: string, auth: AuthContext): Promise<ProgressResponse> {
-  return withAuthRetry(auth, (token) => getJson<ProgressResponse>(`/api/progress/${userId}`, token));
+export async function fetchProgress(userId: string, auth: AuthContext, timeZone?: string): Promise<ProgressResponse> {
+  // The time zone sets the day boundary the server uses for streakRepairAvailable.
+  const extraHeaders = timeZone ? { 'x-user-timezone': timeZone } : undefined;
+  return withAuthRetry(auth, (token) => getJson<ProgressResponse>(`/api/progress/${userId}`, token, extraHeaders));
+}
+
+export async function repairStreak(userId: string, auth: AuthContext, timeZone?: string): Promise<StreakRepairResponse> {
+  return withAuthRetry(auth, (token) => postJson<StreakRepairResponse>(
+    `/api/progress/${userId}/streak/repair`,
+    { timeZone },
+    token
+  ));
 }
 
 export async function fetchToday(userId: string, auth: AuthContext): Promise<TodayResponse> {

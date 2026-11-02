@@ -480,6 +480,11 @@ describe('Moneta API auth + learning flow', () => {
       .send({});
 
     expect(denied.status).toBe(402);
+
+    const progress = await request(app)
+      .get(`/api/progress/${userId}`)
+      .set('Authorization', `Bearer ${accessToken}`);
+    expect(progress.body.streakRepairAvailable).toBe(false);
   });
 
   it('lets a Pro user repair a streak broken by exactly one missed day', async () => {
@@ -516,6 +521,13 @@ describe('Moneta API auth + learning flow', () => {
     user.lastActiveDate = twoDaysAgo.toISOString().slice(0, 10);
     await repository.upsertUserProfile(user);
 
+    const progressBeforeRepair = await request(app)
+      .get(`/api/progress/${userId}`)
+      .query({ timeZone: 'UTC' })
+      .set('Authorization', `Bearer ${accessToken}`);
+    expect(progressBeforeRepair.status).toBe(200);
+    expect(progressBeforeRepair.body.streakRepairAvailable).toBe(true);
+
     const repaired = await request(app)
       .post(`/api/progress/${userId}/streak/repair`)
       .set('Authorization', `Bearer ${accessToken}`)
@@ -523,6 +535,12 @@ describe('Moneta API auth + learning flow', () => {
 
     expect(repaired.status).toBe(200);
     expect(repaired.body.streakDays).toBe(6);
+
+    const progressAfterRepair = await request(app)
+      .get(`/api/progress/${userId}`)
+      .set('x-user-timezone', 'UTC')
+      .set('Authorization', `Bearer ${accessToken}`);
+    expect(progressAfterRepair.body.streakRepairAvailable).toBe(false);
 
     // A repeat repair attempt for the same break is refused (no separate
     // usage-limit state is needed: the streak is simply no longer broken).

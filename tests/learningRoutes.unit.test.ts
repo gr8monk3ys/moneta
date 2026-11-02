@@ -9,6 +9,7 @@ function makeUser(overrides: Partial<UserProfile> = {}): UserProfile {
     userId: overrides.userId ?? 'user-1',
     currentLevel: overrides.currentLevel ?? 'F1',
     streakDays: overrides.streakDays ?? 0,
+    lastActiveDate: overrides.lastActiveDate,
     entitlement: overrides.entitlement ?? createDefaultEntitlement(),
     completedLessons: overrides.completedLessons,
     skills: overrides.skills ?? {}
@@ -41,6 +42,28 @@ describe('learning route helpers', () => {
     expect(summary.masteredSkills).toBe(1);
     expect(summary.completedLessons).toBe(0);
     expect(summary.totalLessons).toBeGreaterThan(0);
+    expect(summary.streakRepairAvailable).toBe(false);
+  });
+
+  it('reports streak repair as available only for an entitled user with exactly one missed day', () => {
+    const now = new Date('2026-03-10T12:00:00.000Z');
+    const brokenByOneDay = { streakDays: 5, lastActiveDate: '2026-03-08' };
+
+    const proUser = makeUser({ ...brokenByOneDay, entitlement: makeProEntitlement() });
+    const summary = learningTestables.getProgressSummary(proUser, { timeZone: 'UTC', now });
+    expect(summary.streakRepairAvailable).toBe(true);
+    // The dry run must not mutate the stored profile.
+    expect(proUser.lastActiveDate).toBe('2026-03-08');
+
+    expect(learningTestables.getProgressSummary(makeUser(brokenByOneDay), { timeZone: 'UTC', now }).streakRepairAvailable).toBe(false);
+    expect(learningTestables.getProgressSummary(
+      makeUser({ streakDays: 5, lastActiveDate: '2026-03-09', entitlement: makeProEntitlement() }),
+      { timeZone: 'UTC', now }
+    ).streakRepairAvailable).toBe(false);
+    expect(learningTestables.getProgressSummary(
+      makeUser({ streakDays: 5, lastActiveDate: '2026-03-05', entitlement: makeProEntitlement() }),
+      { timeZone: 'UTC', now }
+    ).streakRepairAvailable).toBe(false);
   });
 
   it('builds review queues and resolves time zones safely', () => {
