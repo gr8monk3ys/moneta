@@ -32,25 +32,13 @@ if [[ "${REQUIRE_HIGH_RELEASE_POLICY}" == "true" && "${MOBILE_AUDIT_LEVEL}" != "
 fi
 
 run_step "Documentation readiness" npm run check:docs
-run_step "Backend lint" npm run lint
-run_step "Backend tests with coverage gate" npm run test:ci
-
-if [[ -n "${DATABASE_URL:-}" ]]; then
-  run_step "Backend integration tests" npm run test:integration
-else
-  if [[ "${REQUIRE_INTEGRATION_TESTS}" == "true" ]]; then
-    echo "DATABASE_URL is required when REQUIRE_INTEGRATION_TESTS=true" >&2
-    exit 1
-  fi
-  echo
-  echo "== Backend integration tests =="
-  echo "Skipping: DATABASE_URL is not set."
-  echo "Set DATABASE_URL or REQUIRE_INTEGRATION_TESTS=true to enforce this gate."
+if [[ -z "${DATABASE_URL:-}" && "${REQUIRE_INTEGRATION_TESTS}" == "true" ]]; then
+  echo "DATABASE_URL is required when REQUIRE_INTEGRATION_TESTS=true" >&2
+  exit 1
 fi
-
-run_step "Backend build" npm run build
-run_step "Backend end-to-end smoke tests" npm run test:e2e
-run_step "Backend security audit (high/critical)" npm audit --audit-level=high
+# Lint, unit (coverage gate), integration (skips itself without DATABASE_URL),
+# build, e2e smoke, audit: the same stage the CI `quality` job runs.
+run_step "Backend (npm run verify:backend)" npm run verify:backend
 
 if [[ "${REQUIRE_BILLING_RELEASE_CONFIG}" == "true" ]]; then
   run_step "Billing release readiness config" ./scripts/billing-release-readiness-check.sh
@@ -68,27 +56,21 @@ else
   echo "Skipping: set REQUIRE_LAUNCH_DOCS_READY=true to enforce launch-document placeholder checks."
 fi
 
-pushd "${ROOT_DIR}/mobile" >/dev/null
-run_step "Mobile lint" npm run lint
-run_step "Mobile typecheck" npm run typecheck
-run_step "Mobile tests with coverage gate" npm run test:ci
 if [[ "${MOBILE_AUDIT_LEVEL}" == "off" ]]; then
+  pushd "${ROOT_DIR}/mobile" >/dev/null
+  run_step "Mobile lint" npm run lint
+  run_step "Mobile typecheck" npm run typecheck
+  run_step "Mobile tests with coverage gate" npm run test:ci
   echo
   echo "== Mobile security audit =="
   echo "Skipping: MOBILE_AUDIT_LEVEL=off"
+  popd >/dev/null
 else
-  # Use the allowlist-aware gate, the same one `mobile-quality` runs, rather
-  # than a bare `npm audit`. They disagreed: a bare audit fails on advisories
-  # that have NO fixed release anywhere in the ecosystem -- image-size reaches
-  # us through metro and every published version is vulnerable -- so this step
-  # could never pass while mobile-quality was correctly green. It went
-  # unnoticed because this job `needs: mobile-quality`, which was itself red
-  # for months, so final-gate was SKIPPED in every run on main rather than
-  # failing where anyone could see it. Two gates auditing the same tree must
-  # apply the same policy, or the stricter one is just a permanent red.
-  run_step "Mobile security audit (allowlist-aware)" node scripts/audit-gate.mjs
+  # The same stage the CI `mobile-quality` job runs, including the
+  # allowlist-aware audit gate (a bare `npm audit` fails on advisories with no
+  # fixed release anywhere, e.g. image-size via metro).
+  run_step "Mobile (npm run verify:mobile)" npm run verify:mobile
 fi
-popd >/dev/null
 
 echo
 echo "All final verification gates passed."

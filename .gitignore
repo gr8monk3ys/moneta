@@ -10,3 +10,4 @@ mobile/.env
 .claude/skills/neon*
 skills-lock.json
 .expo/
+reports/
