@@ -18,6 +18,8 @@
   "include": [
     "api",
     "src",
-    "tests"
+    "tests",
+    "e2e",
+    "playwright.config.ts"
   ]
 }
