@@ -1,6 +1,8 @@
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { fromPartial } from '@total-typescript/shoehorn';
+import type { Pool } from 'pg';
 import { describe, expect, it, vi } from 'vitest';
 import { MigrationRunner } from '../src/migrations.js';
 
@@ -43,7 +45,7 @@ describe('MigrationRunner', () => {
       .mockResolvedValueOnce({ rowCount: 1 }) // 002 already applied
       .mockResolvedValueOnce({}); // advisory unlock
 
-    const runner = new MigrationRunner(pool as never, dir);
+    const runner = new MigrationRunner(fromPartial<Pool>(pool), dir);
     await runner.run();
 
     const calls = queryCalls(client);
@@ -72,7 +74,7 @@ describe('MigrationRunner', () => {
       .mockResolvedValueOnce({}) // rollback
       .mockResolvedValueOnce({}); // advisory unlock
 
-    const runner = new MigrationRunner(pool as never, dir);
+    const runner = new MigrationRunner(fromPartial<Pool>(pool), dir);
 
     await expect(runner.run()).rejects.toThrow('boom');
 
