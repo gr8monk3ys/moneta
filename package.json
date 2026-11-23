@@ -11,6 +11,7 @@
     "start": "node dist/src/server.js",
     "dev": "tsx src/server.ts",
     "lint": "eslint .",
+    "depcruise": "depcruise src api tests --config .dependency-cruiser.cjs",
     "test": "vitest run --exclude dist tests",
     "test:integration": "vitest run --exclude dist tests/postgres.integration.test.ts --reporter=default --reporter=json --outputFile.json=reports/integration.json",
     "test:all": "npm test && npm run test:integration",
@@ -21,9 +22,10 @@
     "release:evidence": "./scripts/collect-release-evidence.sh",
     "test:ci": "vitest run --coverage --exclude dist tests --reporter=default --reporter=json --outputFile.json=reports/unit.json",
     "test:e2e": "vitest run --config vitest.e2e.config.mjs --reporter=default --reporter=json --outputFile.json=reports/e2e.json",
+    "test:browser": "playwright test",
     "check:synthetic-uptime": "./scripts/synthetic-uptime-check.sh",
     "verify": "./scripts/final-verification-gate.sh",
-    "verify:backend": "npm run lint && npm run test:ci && npm run test:integration && npm run build && npm run test:e2e && npm audit --audit-level=high",
+    "verify:backend": "npm run lint && npm run depcruise && npm run test:ci && npm run test:integration && npm run build && npm run test:e2e && npm run test:browser && npm audit --audit-level=high",
     "verify:mobile": "mkdir -p reports && cd mobile && npm run lint && npm run typecheck && npm run test:ci -- --json --outputFile=../reports/mobile.json && node scripts/audit-gate.mjs"
   },
   "keywords": [],
@@ -50,6 +52,9 @@
     "minimatch": "11.0.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.65.1",
+    "@total-typescript/shoehorn": "^0.1.2",
+    "@total-typescript/ts-reset": "^0.6.1",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.10",
@@ -60,6 +65,7 @@
     "@typescript-eslint/eslint-plugin": "^8.55.0",
     "@typescript-eslint/parser": "^8.55.0",
     "@vitest/coverage-v8": "^4.1.12",
+    "dependency-cruiser": "^18.8.0",
     "eslint": "^9.39.2",
     "supertest": "^7.2.2",
     "tsx": "^4.21.0",

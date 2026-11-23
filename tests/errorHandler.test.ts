@@ -1,4 +1,5 @@
-import type { NextFunction, Response } from 'express';
+import type { Response } from 'express';
+import { fromPartial } from '@total-typescript/shoehorn';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../src/errors.js';
 import { errorHandler } from '../src/middleware/errorHandler.js';
@@ -22,20 +23,20 @@ describe('errorHandler middleware', () => {
   });
 
   it('returns ApiError details and status code', () => {
-    const req = {
+    const req = fromPartial<RequestLoggerRequest>({
       requestId: 'req-1',
       path: '/api/test',
       method: 'GET'
-    } as unknown as RequestLoggerRequest;
+    });
 
     const json = vi.fn();
-    const res = {
+    const res = fromPartial<Response>({
       status: vi.fn().mockReturnValue({ json })
-    } as unknown as Response;
+    });
 
     const err = new ApiError(409, 'Conflict', { reason: 'duplicate' });
 
-    errorHandler(err, req, res, vi.fn() as NextFunction);
+    errorHandler(err, req, res, vi.fn());
 
     expect(logErrorSpy).toHaveBeenCalledWith({
       message: 'Conflict',
@@ -49,18 +50,18 @@ describe('errorHandler middleware', () => {
   });
 
   it('returns generic 500 response for unknown errors', () => {
-    const req = {
+    const req = fromPartial<RequestLoggerRequest>({
       requestId: 'req-2',
       path: '/api/test',
       method: 'POST'
-    } as unknown as RequestLoggerRequest;
+    });
 
     const json = vi.fn();
-    const res = {
+    const res = fromPartial<Response>({
       status: vi.fn().mockReturnValue({ json })
-    } as unknown as Response;
+    });
 
-    errorHandler(new Error('boom'), req, res, vi.fn() as NextFunction);
+    errorHandler(new Error('boom'), req, res, vi.fn());
 
     expect(logErrorSpy).toHaveBeenCalledWith({
       message: 'Unhandled error',
@@ -75,18 +76,18 @@ describe('errorHandler middleware', () => {
   });
 
   it('logs unknown primitive errors safely', () => {
-    const req = {
+    const req = fromPartial<RequestLoggerRequest>({
       requestId: 'req-3',
       path: '/api/test',
       method: 'PATCH'
-    } as unknown as RequestLoggerRequest;
+    });
 
     const json = vi.fn();
-    const res = {
+    const res = fromPartial<Response>({
       status: vi.fn().mockReturnValue({ json })
-    } as unknown as Response;
+    });
 
-    errorHandler('primitive-error', req, res, vi.fn() as NextFunction);
+    errorHandler('primitive-error', req, res, vi.fn());
 
     expect(logErrorSpy).toHaveBeenCalledWith(expect.objectContaining({ error: 'unknown' }));
     expect(res.status).toHaveBeenCalledWith(500);

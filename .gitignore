@@ -11,3 +11,7 @@ mobile/.env
 skills-lock.json
 .expo/
 reports/
+
+# playwright
+test-results/
+playwright-report/

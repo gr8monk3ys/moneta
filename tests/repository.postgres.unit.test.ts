@@ -1,3 +1,5 @@
+import { fromPartial } from '@total-typescript/shoehorn';
+import type { Pool } from 'pg';
 import { describe, expect, it, vi } from 'vitest';
 import { createDefaultEntitlement } from '../src/billing.js';
 import { PostgresUserRepository } from '../src/repository.postgres.js';
@@ -12,7 +14,7 @@ function buildPoolMock() {
 describe('PostgresUserRepository', () => {
   it('maps auth/profile/token queries and list operations', async () => {
     const pool = buildPoolMock();
-    const repo = new PostgresUserRepository(pool as never);
+    const repo = new PostgresUserRepository(fromPartial<Pool>(pool));
 
     pool.query.mockImplementation(async (sql: string) => {
       if (sql.includes('FROM auth_users WHERE email')) {
@@ -119,7 +121,7 @@ describe('PostgresUserRepository', () => {
 
   it('returns null/missing defaults for absent rows or malformed json', async () => {
     const pool = buildPoolMock();
-    const repo = new PostgresUserRepository(pool as never);
+    const repo = new PostgresUserRepository(fromPartial<Pool>(pool));
 
     pool.query.mockImplementation(async (sql: string) => {
       if (sql.includes('FROM auth_users WHERE email')) {
@@ -179,7 +181,7 @@ describe('PostgresUserRepository', () => {
 
   it('executes writes, account deletion transaction, and readiness checks', async () => {
     const pool = buildPoolMock();
-    const repo = new PostgresUserRepository(pool as never);
+    const repo = new PostgresUserRepository(fromPartial<Pool>(pool));
 
     let readinessCalls = 0;
     let processedEvent = false;
@@ -300,7 +302,7 @@ describe('PostgresUserRepository', () => {
 
   it('maps password-reset helpers, completed lessons, and missing-user password updates', async () => {
     const pool = buildPoolMock();
-    const repo = new PostgresUserRepository(pool as never);
+    const repo = new PostgresUserRepository(fromPartial<Pool>(pool));
 
     let passwordUpdateCalls = 0;
 
@@ -393,7 +395,7 @@ describe('PostgresUserRepository', () => {
 
   it('returns false for empty account deletion and rolls back failed transactions', async () => {
     const pool = buildPoolMock();
-    const repo = new PostgresUserRepository(pool as never);
+    const repo = new PostgresUserRepository(fromPartial<Pool>(pool));
 
     const emptyClient = {
       query: vi.fn()
