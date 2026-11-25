@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.1](https://github.com/gr8monk3ys/moneta/compare/v1.1.0...v1.1.1) (2026-11-25)
+
+
+### Bug Fixes
+
+* **deps:** clear Dependabot alerts (vitest, glob, minimatch) ([#116](https://github.com/gr8monk3ys/moneta/issues/116)) ([ee11088](https://github.com/gr8monk3ys/moneta/commit/ee110888ae52b56991a38cc02d038d9e00c3b0ed))
+* **deps:** clear Dependabot alerts for vitest/mocker, glob and minimatch ([ee11088](https://github.com/gr8monk3ys/moneta/commit/ee110888ae52b56991a38cc02d038d9e00c3b0ed))
+
 ## [1.1.0](https://github.com/gr8monk3ys/moneta/compare/v1.0.0...v1.1.0) (2026-11-09)
 
 
