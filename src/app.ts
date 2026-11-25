@@ -92,7 +92,10 @@ export function createApp(options: AppOptions): express.Express {
   });
 
   app.disable('x-powered-by');
-  app.set('trust proxy', options.trustProxy);
+  // Trust exactly one hop (the Vercel edge / load balancer), never `true`:
+  // `true` takes the left-most, client-controlled X-Forwarded-For entry as
+  // req.ip, letting anyone bypass the IP rate limits.
+  app.set('trust proxy', options.trustProxy ? 1 : false);
   app.use(helmet());
   app.use('/marketing', express.static(path.join(publicDir, 'marketing'), {
     immutable: true,

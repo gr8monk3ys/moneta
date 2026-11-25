@@ -1601,6 +1601,30 @@ describe('Moneta API auth + learning flow', () => {
     expect(noCors.headers['access-control-allow-origin']).toBeUndefined();
   });
 
+  it('trusts exactly one proxy hop so a spoofed X-Forwarded-For cannot dodge the rate limit', async () => {
+    const app = createApp({
+      repository: new InMemoryUserRepository(),
+      jwtSecret: 'test-secret',
+      jwtRefreshSecret: 'test-refresh-secret',
+      jwtAccessTtlSeconds: 3600,
+      jwtRefreshTtlSeconds: 604800,
+      allowedOrigins: [],
+      trustProxy: true
+    });
+
+    // The proxy (Vercel) appends the real client IP as the last entry; the
+    // client controls everything before it.
+    const first = await request(app)
+      .get('/api/does-not-exist')
+      .set('X-Forwarded-For', '198.51.100.1, 203.0.113.7');
+    const second = await request(app)
+      .get('/api/does-not-exist')
+      .set('X-Forwarded-For', '198.51.100.2, 203.0.113.7');
+
+    expect(Number(first.headers['ratelimit-remaining'])).toBe(119);
+    expect(Number(second.headers['ratelimit-remaining'])).toBe(118);
+  });
+
   it('returns not ready when repository readiness fails', async () => {
     const repository = new InMemoryUserRepository();
     repository.checkReadiness = async () => false;

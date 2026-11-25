@@ -50,7 +50,7 @@ Execution companion:
   - `JWT_REFRESH_SECRET`
   - `METRICS_TOKEN`
 - [ ] Configure `CORS_ORIGINS` to explicit production domains only.
-- [ ] Set `TRUST_PROXY=true` when running behind a load balancer or reverse proxy.
+- [ ] Set `TRUST_PROXY=true` when running behind a load balancer or reverse proxy (it trusts exactly one proxy hop, as on Vercel).
 - [ ] Ensure `BILLING_ALLOW_SANDBOX_PURCHASES=false` in production.
 - [ ] Run `./scripts/billing-release-readiness-check.sh` with production release env vars and resolve all failures.
 
