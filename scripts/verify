@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# Fast gate that Claude Code runs before a session can finish: the CI `quality`
+# and `mobile-quality` checks without Postgres, e2e, Playwright or npm audit.
+# The full check before a PR is still `npm run verify` (needs DATABASE_URL).
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+npm ci
+npm run check:docs
+npm run lint
+npm run depcruise
+npm run test:ci   # unit tests + coverage floors; the Postgres test skips itself without DATABASE_URL
+npm run build     # tsc: the backend's type check (output goes to gitignored dist/)
+
+(
+  cd mobile
+  npm ci
+  npm run lint
+  npm run typecheck
+  npm run test:ci
+)
