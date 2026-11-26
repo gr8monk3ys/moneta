@@ -115,7 +115,7 @@ export function createApp(options: AppOptions): express.Express {
 
   // Browsers and link previews ask for /favicon.ico before reading the page's <link> tags.
   app.get('/favicon.ico', (_req, res) => {
-    res.sendFile(path.join(publicDir, 'marketing', 'favicon.ico'), { maxAge: '7d' });
+    res.sendFile('marketing/favicon.ico', { root: publicDir, maxAge: '7d' });
   });
 
   app.get('/robots.txt', (req, res) => {
