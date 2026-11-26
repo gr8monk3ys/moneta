@@ -34,7 +34,9 @@ function pageShell(title: string, bodyHtml: string): string {
     <title>${title} | Moneta</title>
     <meta name="robots" content="index,follow" />
     <meta name="theme-color" content="#0c1415" />
+    <link rel="icon" href="/marketing/favicon.ico" sizes="48x48" />
     <link rel="icon" href="/marketing/moneta-mark.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/marketing/apple-touch-icon.png" />
     <style>
       :root {
         --ink: #0c1415;

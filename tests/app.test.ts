@@ -1659,6 +1659,20 @@ describe('Moneta API auth + learning flow', () => {
     expect(sitemap.text).toContain('<loc>http://moneta.test/legal/privacy-policy</loc>');
   });
 
+  it('serves the favicon and a PNG share image', async () => {
+    const { app } = buildApp();
+
+    const favicon = await request(app).get('/favicon.ico');
+    expect(favicon.status).toBe(200);
+
+    const page = await request(app).get('/').set('Host', 'moneta.test');
+    expect(page.text).toContain('content="http://moneta.test/marketing/og-image.png"');
+
+    const ogImage = await request(app).get('/marketing/og-image.png');
+    expect(ogImage.status).toBe(200);
+    expect(ogImage.headers['content-type']).toContain('image/png');
+  });
+
   it('serves the published legal pages and 404s unknown slugs', async () => {
     const { app } = buildApp();
 

@@ -97,7 +97,7 @@ ${legalUrls}
 export function renderMarketingPage(req: Request): string {
   const baseUrl = resolveBaseUrl(req);
   const canonicalUrl = `${baseUrl}/`;
-  const socialImageUrl = `${baseUrl}/marketing/moneta-mark.svg`;
+  const socialImageUrl = `${baseUrl}/marketing/og-image.png`;
   const { primary, secondary, legal } = resolveLaunchLinks();
   const structuredData = {
     '@context': 'https://schema.org',
@@ -130,7 +130,9 @@ export function renderMarketingPage(req: Request): string {
     <meta name="theme-color" content="#0c1415" />
     <meta name="robots" content="index,follow" />
     <link rel="canonical" href="${escapeHtml(canonicalUrl)}" />
+    <link rel="icon" href="/marketing/favicon.ico" sizes="48x48" />
     <link rel="icon" href="/marketing/moneta-mark.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/marketing/apple-touch-icon.png" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Moneta" />
     <meta property="og:title" content="Moneta | Build money confidence in 5-minute lessons" />
@@ -140,6 +142,8 @@ export function renderMarketingPage(req: Request): string {
     />
     <meta property="og:url" content="${escapeHtml(canonicalUrl)}" />
     <meta property="og:image" content="${escapeHtml(socialImageUrl)}" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
     <meta property="og:image:alt" content="Moneta brand mark" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Moneta | Build money confidence in 5-minute lessons" />
